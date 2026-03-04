@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!--
+    patient-search.html — FIND PATIENT ROOM PAGE
+    Visitors use this page to search for a patient
+    and then navigate to their room.
+
+    Features:
+      • Search by Patient Name OR Patient ID
+      • Wheelchair mode toggle
+      • Shows room details before navigating
+      • "Show Pathway" button → goes to map.html
+  -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Find Patient Room — City General Hospital</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Search box highlight on focus */
+    #searchInput:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 4px rgba(26,111,181,0.15);
+    }
+
+    /* Result card shown after a successful search */
+    .result-card {
+      background: #edf6ff;
+      border: 2px solid #bee3f8;
+      border-radius: 14px;
+      padding: 22px;
+      display: none; /* Hidden until a result is found */
+    }
+    .result-card.show { display: block; animation: fadeUp 0.3s both; }
+
+    /* Large room number display */
+    .room-display {
+      font-family: 'Poppins', sans-serif;
+      font-size: 52px;
+      font-weight: 700;
+      color: var(--primary);
+      text-align: center;
+      line-height: 1;
+      margin: 12px 0;
+    }
+
+    /* Patient info row */
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid #d0e8f8;
+      font-size: 15px;
+    }
+    .info-row:last-child { border-bottom: none; }
+    .info-row .lbl { color: var(--text-muted); font-size: 13px; }
+    .info-row .val { font-weight: 700; color: var(--text); }
+
+    /* Navigate buttons row */
+    .nav-btns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 16px;
+    }
+    @media(max-width:400px) { .nav-btns { grid-template-columns: 1fr; } }
+
+    /* Hint text */
+    .search-hint {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================================
+       TOP NAVIGATION BAR
+       ============================================================ -->
+  <nav class="topbar">
+    <a href="index.html" class="logo">
+      <img src="logo.jpeg" alt="Hospital Logo" class="logo-img">
+      <span>City General Hospital</span>
+    </a>
+    <div class="topbar-right">
+      <select class="lang-select" id="langSelect" onchange="saveLang(this.value)">
+        <option value="en">🌐 English</option>
+        <option value="te">తెలుగు</option>
+        <option value="hi">हिन्दी</option>
+      </select>
+      <span class="staff-chip" id="staffChip" style="display:none;"></span>
+      <a href="login.html" class="btn-topbar" id="loginBtn">🔐 Staff Login</a>
+    </div>
+  </nav>
+
+  <!-- ============================================================
+       PAGE CONTENT
+       ============================================================ -->
+  <div class="page-wrap">
+
+    <a href="index.html" class="back-link">← Back to Home</a>
+
+    <div class="page-header">
+      <h1 class="page-title">🔍 Find Patient Room</h1>
+      <p class="page-sub">Search by patient name or ID to find their room and get directions</p>
+      <div class="color-strip"></div>
+    </div>
+
+    <div class="grid-2" style="align-items:start;">
+
+      <!-- ── LEFT: Search Card ── -->
+      <div>
+        <div class="card">
+          <div class="card-title">🔎 Search Patient</div>
+
+          <!-- Error / info alerts -->
+          <div class="alert" id="searchAlert"></div>
+
+          <!-- Search input -->
+          <div class="form-group">
+            <label for="searchInput">Patient Name or Patient ID</label>
+            <input
+              type="text"
+              id="searchInput"
+              placeholder="e.g. Ram Kumar  or  P001"
+              oninput="clearResult()"
+              autocomplete="off"
+              onkeydown="if(event.key==='Enter') searchPatient()"
+            >
+            <p class="search-hint">💡 Type a partial name and press Search</p>
+          </div>
+
+          <!-- Wheelchair mode toggle -->
+          <label class="toggle-box" for="wheelchairToggle">
+            <input type="checkbox" id="wheelchairToggle">
+            <div>
+              <div class="toggle-box-label">♿ Wheelchair Mode</div>
+              <div class="toggle-box-note">Routes via ramps and lifts only — no stairs</div>
+            </div>
+          </label>
+
+          <!-- Search button -->
+          <button class="btn btn-primary btn-block" onclick="searchPatient()" style="margin-bottom:12px;">
+            🔍 Show Room Number
+          </button>
+
+        </div><!-- /.card -->
+      </div><!-- /left -->
+
+      <!-- ── RIGHT: Result Card (hidden until search) ── -->
+      <div>
+        <!-- Placeholder when no search yet -->
+        <div class="card" id="placeholderCard" style="text-align:center; padding:40px 20px; color:var(--text-muted);">
+          <div style="font-size:50px; margin-bottom:12px;">🔍</div>
+          <div style="font-weight:700; font-size:16px; color:var(--text); margin-bottom:6px;">
+            Search for a Patient
+          </div>
+          <div style="font-size:14px;">
+            Enter a name or patient ID on the left and click <strong>Show Room Number</strong> to find their location.
+          </div>
+        </div>
+
+        <!-- Result card (shown after search) -->
+        <div class="result-card" id="resultCard">
+
+          <div style="text-align:center;">
+            <div style="font-size:13px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; font-weight:700;">
+              Patient Found
+            </div>
+            <div class="room-display" id="roomDisplay">101</div>
+            <div style="font-size:13px; color:var(--text-muted);">ROOM NUMBER</div>
+          </div>
+
+          <hr style="border:none; border-top:1px solid #d0e8f8; margin:16px 0;">
+
+          <!-- Patient details -->
+          <div id="patientDetails">
+            <!-- Filled by JS -->
+          </div>
+
+          <!-- Navigation buttons -->
+          <div class="nav-btns">
+            <button class="btn btn-primary" onclick="goToMap('pathway')">
+              🗺️ Show Pathway
+            </button>
+            <button class="btn btn-secondary" onclick="goToMap('floor')">
+              🏢 View Floor Map
+            </button>
+          </div>
+
+          <!-- Voice direction button -->
+          <button class="btn btn-outline btn-block" style="margin-top:10px;" onclick="speakRoomInfo()">
+            🔊 Read Directions Aloud
+          </button>
+
+        </div><!-- /#resultCard -->
+
+      </div><!-- /right -->
+    </div><!-- /.grid-2 -->
+
+  </div><!-- /.page-wrap -->
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="script.js"></script>
+  <script>
+
+    // ── Current found patient (stored so we can pass to map.html) ──
+    let foundPatient = null;
+
+    // ── On page load ──
+    applyStoredLang();
+    updateTopbarStaff();
+
+    /**
+     * searchPatient() — async, searches Firebase Firestore
+     */
+    async function searchPatient() {
+      const query = document.getElementById('searchInput').value.trim();
+
+      if (!query) {
+        showAlert('searchAlert', 'error', 'Please enter a patient name or ID.');
+        return;
+      }
+
+      // Show searching state
+      const btn = document.querySelector('.btn-primary.btn-block');
+      if (btn) { btn.textContent = '⏳ Searching...'; btn.disabled = true; }
+
+      const patient = await findPatient(query);
+
+      if (btn) { btn.textContent = '🔍 Show Room Number'; btn.disabled = false; }
+
+      if (!patient) {
+        showAlert('searchAlert', 'error',
+          `No patient found matching "${query}". Please check the name or ID.`);
+        hideResult();
+        return;
+      }
+
+      foundPatient = patient;
+      hideAlert('searchAlert');
+      showResult(patient);
+    }
+
+    /** Show the result card with patient details */
+    function showResult(patient) {
+      // Hide placeholder, show result
+      document.getElementById('placeholderCard').style.display = 'none';
+      document.getElementById('resultCard').classList.add('show');
+
+      // Room number (big display)
+      document.getElementById('roomDisplay').textContent = patient.room;
+
+      // Patient details rows
+      document.getElementById('patientDetails').innerHTML = `
+        <div class="info-row">
+          <span class="lbl">👤 Patient Name</span>
+          <span class="val">${patient.name}</span>
+        </div>
+        <div class="info-row">
+          <span class="lbl">🪪 Patient ID</span>
+          <span class="val">${patient.id}</span>
+        </div>
+        <div class="info-row">
+          <span class="lbl">🏢 Floor</span>
+          <span class="val">Floor ${patient.floor}</span>
+        </div>
+        <div class="info-row">
+          <span class="lbl">🏥 Department</span>
+          <span class="val">${patient.dept}</span>
+        </div>
+        ${patient.notes ? `
+        <div class="info-row">
+          <span class="lbl">📝 Notes</span>
+          <span class="val" style="font-size:13px; color:var(--text-muted);">${patient.notes}</span>
+        </div>` : ''}
+      `;
+    }
+
+    /** Hide result (called when user types new search) */
+    function clearResult() {
+      foundPatient = null;
+      hideResult();
+    }
+
+    function hideResult() {
+      document.getElementById('placeholderCard').style.display = 'block';
+      document.getElementById('resultCard').classList.remove('show');
+    }
+
+    function hideAlert(id) {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove('show');
+    }
+
+    /**
+     * goToMap(mode)
+     * Save destination info to sessionStorage and open map.html
+     * @param {string} mode — 'pathway' or 'floor'
+     */
+    function goToMap(mode) {
+      if (!foundPatient) {
+        alert('Please search for a patient first.');
+        return;
+      }
+
+      const wheelchair = document.getElementById('wheelchairToggle').checked;
+
+      // Store navigation target for map.html to read
+      setNavTarget({
+        type:        'patient',
+        name:        foundPatient.name,
+        room:        foundPatient.room,
+        floor:       foundPatient.floor,
+        dept:        foundPatient.dept,
+        // Patient room positions on canvas (approximate)
+        destX:       getRoomX(foundPatient.floor, foundPatient.room),
+        destY:       getRoomY(foundPatient.floor, foundPatient.room),
+        wheelchair:  wheelchair,
+        mode:        mode,
+        lang:        getCurrentLang(),
+      });
+
+      window.location.href = 'map.html';
+    }
+
+    /**
+     * speakRoomInfo()
+     * Read the room information aloud in the selected language.
+     */
+    function speakRoomInfo() {
+      if (!foundPatient) return;
+      const lang = getCurrentLang();
+      const messages = {
+        en: `Patient ${foundPatient.name} is in Room ${foundPatient.room} on Floor ${foundPatient.floor}. Department: ${foundPatient.dept}.`,
+        te: `రోగి ${foundPatient.name} అంతస్తు ${foundPatient.floor}లో గది ${foundPatient.room}లో ఉన్నారు.`,
+        hi: `मरीज़ ${foundPatient.name} कमरा नंबर ${foundPatient.room}, मंजिल ${foundPatient.floor} पर हैं।`,
+      };
+      speak(messages[lang] || messages.en, lang);
+    }
+
+    /**
+     * getRoomX / getRoomY
+     * Map room numbers to approximate canvas positions.
+     * (In a real app these would be stored in the database.)
+     */
+    function getRoomX(floor, room) {
+      // Simple hash — rooms spread across the canvas width
+      const num = parseInt(room) || 200;
+      const col = (num % 5); // 0-4
+      return 90 + col * 140; // spread across canvas
+    }
+
+    function getRoomY(floor, room) {
+      // Rooms are in two rows: above and below corridor
+      const num = parseInt(room) || 200;
+      return num % 2 === 0 ? 320 : 50; // alternate rows
+    }
+
+  </script>
+</body>
+</html>

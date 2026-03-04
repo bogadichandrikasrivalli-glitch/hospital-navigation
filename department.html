@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!--
+    department.html — FIND DEPARTMENT PAGE
+    Visitors pick a hospital department from a visual grid
+    and then navigate to it on the map.
+
+    Features:
+      • Visual department cards with icons
+      • Wheelchair mode toggle
+      • Click → redirects to map.html with route
+  -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Find Department — City General Hospital</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Selected department card highlight */
+    .dept-card.selected {
+      border-color: var(--primary);
+      background: #edf6ff;
+      box-shadow: 0 6px 20px rgba(26,111,181,0.18);
+    }
+
+    /* Floor filter tabs */
+    .floor-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .floor-tab {
+      padding: 8px 20px;
+      border-radius: 20px;
+      border: 1.5px solid var(--border);
+      background: #fff;
+      font-family: 'Nunito', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      color: var(--text-muted);
+      transition: all 0.15s;
+    }
+    .floor-tab.active, .floor-tab:hover {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+    }
+
+    /* "Navigate" floating button at bottom */
+    .navigate-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #fff;
+      border-top: 1px solid var(--border);
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.10);
+      padding: 14px 20px;
+      display: none;    /* shown when a dept is selected */
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      z-index: 50;
+      animation: slideIn 0.25s both;
+    }
+    .navigate-bar.show { display: flex; }
+    @media(max-width:480px) {
+      .navigate-bar { flex-direction: column; align-items: stretch; }
+    }
+    /* Extra bottom padding so content isn't behind bar */
+    body.bar-open .page-wrap { padding-bottom: 100px; }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================================
+       TOP NAVIGATION BAR
+       ============================================================ -->
+  <nav class="topbar">
+    <a href="index.html" class="logo">
+      <img src="logo.jpeg" alt="Hospital Logo" class="logo-img">
+      <span>City General Hospital</span>
+    </a>
+    <div class="topbar-right">
+      <select class="lang-select" id="langSelect" onchange="saveLang(this.value)">
+        <option value="en">🌐 English</option>
+        <option value="te">తెలుగు</option>
+        <option value="hi">हिन्दी</option>
+      </select>
+      <span class="staff-chip" id="staffChip" style="display:none;"></span>
+      <a href="login.html" class="btn-topbar" id="loginBtn">🔐 Staff Login</a>
+    </div>
+  </nav>
+
+  <!-- ============================================================
+       PAGE CONTENT
+       ============================================================ -->
+  <div class="page-wrap">
+
+    <a href="index.html" class="back-link">← Back to Home</a>
+
+    <div class="page-header">
+      <h1 class="page-title">🗺️ Find Department</h1>
+      <p class="page-sub">Select a department below to see its location and get step-by-step directions</p>
+      <div class="color-strip"></div>
+    </div>
+
+    <!-- Wheelchair toggle -->
+    <label class="toggle-box" for="deptWheelchair">
+      <input type="checkbox" id="deptWheelchair">
+      <div>
+        <div class="toggle-box-label">♿ Wheelchair Mode</div>
+        <div class="toggle-box-note">Paths via ramps and lifts only — no stairs</div>
+      </div>
+    </label>
+
+    <!-- Floor filter buttons -->
+    <div class="floor-tabs">
+      <button class="floor-tab active" id="tab-all"  onclick="filterFloor('all')">All Floors</button>
+      <button class="floor-tab"        id="tab-f1"   onclick="filterFloor(1)">Floor 1</button>
+      <button class="floor-tab"        id="tab-f2"   onclick="filterFloor(2)">Floor 2</button>
+    </div>
+
+    <!-- Department grid — built by JavaScript -->
+    <div class="dept-grid" id="deptGrid">
+      <!-- Cards inserted by JS -->
+    </div>
+
+    <!-- Info note -->
+    <div style="margin-top:20px; padding:14px 18px; background:#f7f9fc; border-radius:10px;
+                border:1px solid var(--border); font-size:13px; color:var(--text-muted);">
+      💡 <strong>Tip:</strong> Click on a department card to select it, then press
+      <strong>"Navigate to Department"</strong> at the bottom of the screen to get map directions.
+    </div>
+
+  </div><!-- /.page-wrap -->
+
+  <!-- ============================================================
+       FLOATING NAVIGATION BAR
+       (slides up when a department is selected)
+       ============================================================ -->
+  <div class="navigate-bar" id="navBar">
+    <!-- Selected department info -->
+    <div style="display:flex; align-items:center; gap:12px;">
+      <span id="navBarIcon" style="font-size:28px;">🏥</span>
+      <div>
+        <div style="font-weight:700; font-size:16px;" id="navBarName">Department</div>
+        <div style="font-size:13px; color:var(--text-muted);" id="navBarFloor">Floor 1</div>
+      </div>
+    </div>
+
+    <!-- Action buttons -->
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      <button class="btn btn-outline btn-sm" onclick="speakDeptInfo()">
+        🔊 Read Aloud
+      </button>
+      <button class="btn btn-primary" onclick="goToDeptMap()" style="padding:12px 24px;">
+        🗺️ Navigate to Department →
+      </button>
+    </div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="script.js"></script>
+  <script>
+
+    // ── Track selected department ──
+    let selectedDept = null;
+    let currentFloorFilter = 'all';
+
+    // ── On page load ──
+    applyStoredLang();
+    updateTopbarStaff();
+    renderDepartments('all');
+
+    /**
+     * renderDepartments(floorFilter)
+     * Build the department card grid.
+     * @param {string|number} floorFilter — 'all', 1, or 2
+     */
+    function renderDepartments(floorFilter) {
+      currentFloorFilter = floorFilter;
+      const grid = document.getElementById('deptGrid');
+
+      // Filter the DEPARTMENTS array from script.js
+      const toShow = floorFilter === 'all'
+        ? DEPARTMENTS
+        : DEPARTMENTS.filter(d => d.floor === floorFilter);
+
+      grid.innerHTML = toShow.map(dept => `
+        <div class="dept-card" id="card-${dept.id}" onclick="selectDept('${dept.id}')">
+          <div class="dept-icon">${dept.icon}</div>
+          <div class="dept-name">${dept.name}</div>
+          <div class="dept-floor">Floor ${dept.floor}</div>
+        </div>
+      `).join('');
+
+      // Re-highlight if already selected
+      if (selectedDept) {
+        const card = document.getElementById(`card-${selectedDept.id}`);
+        if (card) card.classList.add('selected');
+      }
+    }
+
+    /**
+     * filterFloor(floor)
+     * Filter displayed department cards by floor.
+     */
+    function filterFloor(floor) {
+      // Update tab styling
+      document.querySelectorAll('.floor-tab').forEach(t => t.classList.remove('active'));
+      if (floor === 'all') document.getElementById('tab-all').classList.add('active');
+      else document.getElementById(`tab-f${floor}`).classList.add('active');
+
+      renderDepartments(floor);
+    }
+
+    /**
+     * selectDept(deptId)
+     * Highlight the clicked card and show the navigation bar.
+     */
+    function selectDept(deptId) {
+      // Find the department in our data
+      const dept = DEPARTMENTS.find(d => d.id === deptId);
+      if (!dept) return;
+
+      selectedDept = dept;
+
+      // Remove highlight from all cards
+      document.querySelectorAll('.dept-card').forEach(c => c.classList.remove('selected'));
+
+      // Highlight selected card
+      const card = document.getElementById(`card-${deptId}`);
+      if (card) card.classList.add('selected');
+
+      // Update the floating navigation bar
+      document.getElementById('navBarIcon').textContent  = dept.icon;
+      document.getElementById('navBarName').textContent  = dept.name;
+      document.getElementById('navBarFloor').textContent = `Floor ${dept.floor}`;
+
+      // Show the navigation bar
+      document.getElementById('navBar').classList.add('show');
+      document.body.classList.add('bar-open');
+    }
+
+    /**
+     * goToDeptMap()
+     * Save selected department as navigation target and go to map.
+     */
+    function goToDeptMap() {
+      if (!selectedDept) { alert('Please select a department first.'); return; }
+
+      const wheelchair = document.getElementById('deptWheelchair').checked;
+
+      // Save target for map.html
+      setNavTarget({
+        type:       'department',
+        name:       selectedDept.name,
+        floor:      selectedDept.floor,
+        destX:      selectedDept.x,
+        destY:      selectedDept.y,
+        wheelchair: wheelchair,
+        mode:       'pathway',
+        lang:       getCurrentLang(),
+      });
+
+      window.location.href = 'map.html';
+    }
+
+    /**
+     * speakDeptInfo()
+     * Read selected department info aloud.
+     */
+    function speakDeptInfo() {
+      if (!selectedDept) return;
+      const lang = getCurrentLang();
+      const messages = {
+        en: `${selectedDept.name} is located on Floor ${selectedDept.floor}. Press Navigate to get directions.`,
+        te: `${selectedDept.name} అంతస్తు ${selectedDept.floor}లో ఉంది.`,
+        hi: `${selectedDept.name} मंजिल ${selectedDept.floor} पर है।`,
+      };
+      speak(messages[lang] || messages.en, lang);
+    }
+
+  </script>
+</body>
+</html>

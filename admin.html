@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Patient Data Entry — City General Hospital</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .admin-layout { display:grid; grid-template-columns:380px 1fr; gap:20px; align-items:start; }
+    @media(max-width:760px){ .admin-layout{ grid-template-columns:1fr; } }
+    .form-panel { position:sticky; top:80px; }
+    .count-badge { display:inline-block; background:var(--primary); color:#fff; font-size:12px; font-weight:700; padding:2px 9px; border-radius:20px; margin-left:8px; }
+    .btn-del { background:#fde8e8; color:#8b1a1a; border:1px solid #f5aaaa; padding:4px 10px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; }
+    .btn-del:hover { background:var(--danger); color:#fff; }
+    .floor-badge { background:#dbeeff; color:var(--primary); padding:2px 8px; border-radius:6px; font-size:12px; font-weight:700; }
+    .empty-state { text-align:center; padding:40px 20px; color:var(--text-muted); }
+    .table-scroll { overflow-x:auto; }
+
+    /* Tab system */
+    .tab-bar { display:flex; gap:6px; margin-bottom:20px; flex-wrap:wrap; }
+    .tab-btn { padding:9px 20px; border-radius:20px; border:1.5px solid var(--border); background:#fff; font-family:'Nunito',sans-serif; font-size:14px; font-weight:700; cursor:pointer; color:var(--text-muted); transition:all 0.15s; }
+    .tab-btn.active { background:var(--primary); border-color:var(--primary); color:#fff; }
+    .tab-pane { display:none; }
+    .tab-pane.active { display:block; }
+
+    /* Activity log styles */
+    .log-row { display:flex; align-items:flex-start; gap:12px; padding:12px 16px; border-bottom:1px solid #eef2f7; font-size:13px; transition:background 0.15s; }
+    .log-row:hover { background:#f7f9fc; }
+    .log-icon { font-size:22px; flex-shrink:0; margin-top:2px; }
+    .log-type { font-weight:700; font-size:13px; }
+    .log-time { font-size:11px; color:var(--text-muted); margin-top:2px; }
+    .log-detail { font-size:12px; color:var(--text-muted); margin-top:3px; }
+    .badge-login    { background:#d4f5e9; color:#096640; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; }
+    .badge-logout   { background:#fde8e8; color:#8b1a1a; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; }
+    .badge-add      { background:#dbeeff; color:#1a4e7a; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; }
+    .badge-delete   { background:#fff0e0; color:#7a3800; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; }
+    .badge-account  { background:#f5eeff; color:#5a1a8b; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; }
+
+    /* Added by info in patient table */
+    .added-info { font-size:11px; color:var(--text-muted); margin-top:2px; }
+
+    /* Staff management */
+    .staff-row { display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid #eef2f7; }
+    .staff-avatar { width:38px; height:38px; border-radius:50%; background:var(--primary); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:16px; flex-shrink:0; }
+    .role-badge { padding:2px 10px; border-radius:10px; font-size:11px; font-weight:700; }
+    .role-admin { background:#fff0e0; color:#7a3800; }
+    .role-staff { background:#dbeeff; color:#1a4e7a; }
+    .admin-only-note { background:#fff8e0; border:1px solid #f4a261; border-radius:8px; padding:10px 14px; font-size:13px; color:#7a3800; margin-bottom:14px; }
+  </style>
+</head>
+<body>
+  <nav class="topbar">
+    <a href="index.html" class="logo"><img src="logo.jpeg" alt="Hospital Logo" class="logo-img"><span>City General Hospital</span></a>
+    <div class="topbar-right">
+      <select class="lang-select" id="langSelect" onchange="saveLang(this.value)">
+        <option value="en">🌐 English</option>
+        <option value="te">తెలుగు</option>
+        <option value="hi">हिन्दी</option>
+      </select>
+      <span class="staff-chip" id="staffChip"></span>
+      <button class="btn-topbar" onclick="handleLogout()">🚪 Logout</button>
+    </div>
+  </nav>
+
+  <div class="page-wrap">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;font-size:13px;color:var(--text-muted);">
+      <a href="index.html" style="color:var(--primary);text-decoration:none;">Home</a>
+      <span>›</span><span>Admin Panel</span>
+    </div>
+
+    <div class="page-header">
+      <h1 class="page-title">🗂️ Admin Panel</h1>
+      <p class="page-sub">Manage patients, staff accounts, and view activity logs</p>
+      <div class="color-strip"></div>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="switchTab('patients')">🛏️ Patients</button>
+      <button class="tab-btn" onclick="switchTab('logs')" id="logsTabBtn">📋 Activity Log</button>
+      <button class="tab-btn" onclick="switchTab('staff')" id="staffTabBtn">👥 Staff Accounts</button>
+    </div>
+
+    <!-- ═══ TAB 1: PATIENTS ═══ -->
+    <div class="tab-pane active" id="tab-patients">
+      <div class="admin-layout">
+        <!-- Left: Form -->
+        <div class="form-panel">
+          <div class="card">
+            <div class="card-title">➕ Add New Patient</div>
+            <div class="alert" id="formAlert"></div>
+            <div class="form-group">
+              <label>👤 Patient Name *</label>
+              <input type="text" id="pName" placeholder="e.g. Ramesh Kumar" maxlength="60">
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>🪪 Patient ID *</label>
+                <input type="text" id="pId" placeholder="e.g. P007" maxlength="20">
+              </div>
+              <div class="form-group">
+                <label>🛏️ Room Number *</label>
+                <input type="text" id="pRoom" placeholder="e.g. 204" maxlength="10">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>🏢 Floor *</label>
+                <select id="pFloor">
+                  <option value="">Select floor</option>
+                  <option value="1">Floor 1</option>
+                  <option value="2">Floor 2</option>
+                  <option value="3">Floor 3</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>🏥 Department *</label>
+                <select id="pDept">
+                  <option value="">Select dept.</option>
+                  <option>ICU</option><option>General Ward</option>
+                  <option>Maternity Ward</option><option>Cardiology</option>
+                  <option>Orthopaedics</option><option>Neurology</option>
+                  <option>Pediatrics</option><option>Oncology</option>
+                  <option>Dermatology</option><option>ENT</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>📝 Notes (Optional)</label>
+              <textarea id="pNotes" placeholder="e.g. Window bed, post-op care" maxlength="200"></textarea>
+            </div>
+            <div style="display:flex;gap:10px;">
+              <button class="btn btn-primary" style="flex:1;" onclick="handleAddPatient()" id="addBtn">✅ Add Patient</button>
+              <button class="btn btn-outline" onclick="clearForm()">🗑️ Clear</button>
+            </div>
+          </div>
+          <div class="card" style="background:#edf6ff;border:1px solid #bee3f8;">
+            <div style="font-size:13px;color:#1a4e7a;line-height:1.6;">
+              💡 <strong>Tip:</strong> All additions are logged with your name and timestamp automatically.
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Table -->
+        <div>
+          <div class="card">
+            <div class="card-title">📋 Patient Records <span class="count-badge" id="countBadge">0</span></div>
+            <div class="table-scroll">
+              <table class="patient-table" id="patientTable">
+                <thead>
+                  <tr>
+                    <th>ID</th><th>Name</th><th>Room</th><th>Floor</th>
+                    <th>Department</th><th>Notes</th><th>Added By</th><th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="patientTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ TAB 2: ACTIVITY LOG ═══ -->
+    <div class="tab-pane" id="tab-logs">
+      <div class="card">
+        <div class="card-title">📋 Activity Log <span style="font-size:13px;color:var(--text-muted);font-weight:400;">— all logins, logouts, patient changes</span></div>
+        <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+          <button class="btn btn-outline btn-sm" onclick="filterLogs('all')">All</button>
+          <button class="btn btn-outline btn-sm" onclick="filterLogs('login')">🟢 Logins</button>
+          <button class="btn btn-outline btn-sm" onclick="filterLogs('logout')">🔴 Logouts</button>
+          <button class="btn btn-outline btn-sm" onclick="filterLogs('add_patient')">➕ Added</button>
+          <button class="btn btn-outline btn-sm" onclick="filterLogs('delete_patient')">🗑️ Deleted</button>
+          <button class="btn btn-outline btn-sm" onclick="loadLogs()">🔄 Refresh</button>
+        </div>
+        <div id="logsContainer">
+          <div style="text-align:center;padding:30px;color:var(--text-muted);">Click the "Activity Log" tab to load logs.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ TAB 3: STAFF ACCOUNTS (Admin only) ═══ -->
+    <div class="tab-pane" id="tab-staff">
+      <div class="admin-layout">
+        <!-- Left: Create Staff Form -->
+        <div class="form-panel">
+          <div class="card">
+            <div class="card-title">👤 Create Staff Account</div>
+            <div class="admin-only-note">🔒 Only admins can create new accounts. Staff cannot self-register.</div>
+            <div class="alert" id="staffAlert"></div>
+            <div class="form-group">
+              <label>👤 Full Name *</label>
+              <input type="text" id="sName" placeholder="e.g. Dr. Priya Sharma" maxlength="60">
+            </div>
+            <div class="form-group">
+              <label>📧 Email Address *</label>
+              <input type="email" id="sEmail" placeholder="staff@hospital.com">
+            </div>
+            <div class="form-group">
+              <label>🔑 Password *</label>
+              <input type="password" id="sPassword" placeholder="Min 6 characters">
+            </div>
+            <div class="form-group">
+              <label>🎭 Role *</label>
+              <select id="sRole">
+                <option value="staff">Staff (add/view patients)</option>
+                <option value="admin">Admin (full access)</option>
+              </select>
+            </div>
+            <button class="btn btn-primary btn-block" onclick="handleCreateStaff()" id="createStaffBtn">
+              ✅ Create Account
+            </button>
+          </div>
+        </div>
+
+        <!-- Right: Staff List -->
+        <div>
+          <div class="card">
+            <div class="card-title">👥 All Staff Accounts</div>
+            <div id="staffListContainer">
+              <div style="text-align:center;padding:30px;color:var(--text-muted);">Loading staff...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /.page-wrap -->
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="script.js"></script>
+  <script>
+    applyStoredLang();
+    requireLogin();
+
+    const staff = getLoggedInStaff();
+    document.getElementById('staffChip').textContent = `👤 ${staff.name} (${staff.role})`;
+
+    // Real-time patient listener
+    seedSampleData().then(() => {
+      db.collection('patients').orderBy('name').onSnapshot(snap => {
+        buildTableHTML(snap.docs.map(d => d.data()));
+      });
+    });
+
+    // Hide staff tab for non-admins
+    if (staff.role !== 'admin') {
+      document.getElementById('staffTabBtn').style.display = 'none';
+    }
+
+    /* ── TAB SWITCHING ── */
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById(`tab-${tab}`).classList.add('active');
+      event.target.classList.add('active');
+      if (tab === 'logs')  loadLogs();
+      if (tab === 'staff') { requireAdmin(); loadStaffList(); }
+    }
+
+    /* ── LOGOUT ── */
+    async function handleLogout() {
+      if (!confirm('Are you sure you want to logout?')) return;
+      await logoutStaff();
+      window.location.href = 'login.html';
+    }
+
+    /* ── ADD PATIENT ── */
+    async function handleAddPatient() {
+      const name  = document.getElementById('pName').value.trim();
+      const id    = document.getElementById('pId').value.trim().toUpperCase();
+      const room  = document.getElementById('pRoom').value.trim();
+      const floor = parseInt(document.getElementById('pFloor').value);
+      const dept  = document.getElementById('pDept').value;
+      const notes = document.getElementById('pNotes').value.trim();
+
+      if (!name || !id || !room || !floor || !dept) {
+        showAlert('formAlert','error','Please fill in all required fields.'); return;
+      }
+
+      const btn = document.getElementById('addBtn');
+      btn.textContent = '⏳ Saving...'; btn.disabled = true;
+
+      try {
+        if (await checkPatientIdExists(id)) {
+          showAlert('formAlert','error',`Patient ID "${id}" already exists.`);
+        } else {
+          await savePatient({ id, name, room, floor, dept, notes });
+          showAlert('formAlert','success',`✅ Patient "${name}" saved to Firebase!`);
+          clearForm();
+        }
+      } catch(e) {
+        showAlert('formAlert','error','❌ Error: ' + e.message);
+      }
+      btn.textContent = '✅ Add Patient'; btn.disabled = false;
+    }
+
+    function clearForm() {
+      ['pName','pId','pRoom','pNotes'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('pFloor').value = '';
+      document.getElementById('pDept').value  = '';
+    }
+
+    /* ── PATIENT TABLE ── */
+    function buildTableHTML(patients) {
+      const tbody = document.getElementById('patientTableBody');
+      document.getElementById('countBadge').textContent = patients.length;
+      if (patients.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div style="font-size:40px">🗂️</div>No records yet.</div></td></tr>`;
+        return;
+      }
+      tbody.innerHTML = patients.map(p => `
+        <tr>
+          <td><strong>${p.id}</strong></td>
+          <td>${p.name}</td>
+          <td><strong>${p.room}</strong></td>
+          <td><span class="floor-badge">Floor ${p.floor}</span></td>
+          <td>${p.dept}</td>
+          <td style="color:var(--text-muted);font-size:12px;">${p.notes||'—'}</td>
+          <td>
+            <div style="font-size:12px;font-weight:700;">${p.addedBy||'—'}</div>
+            <div class="added-info">${formatTimestamp(p.addedAt || p.addedAtISO)}</div>
+          </td>
+          <td><button class="btn-del" onclick="deletePatient('${p.id}','${p.name}')">🗑️</button></td>
+        </tr>`).join('');
+    }
+
+    async function deletePatient(id, name) {
+      if (!confirm(`Delete patient "${name}"?`)) return;
+      try { await deletePatientById(id, name); }
+      catch(e) { alert('Error: ' + e.message); }
+    }
+
+    /* ── ACTIVITY LOGS ── */
+    let allLogs = [];
+    async function loadLogs() {
+      document.getElementById('logsContainer').innerHTML = `<div style="text-align:center;padding:30px;color:var(--text-muted);">⏳ Loading logs...</div>`;
+      allLogs = await getActivityLogs(100);
+      renderLogs(allLogs);
+    }
+
+    function filterLogs(type) {
+      const filtered = type === 'all' ? allLogs : allLogs.filter(l => l.type === type);
+      renderLogs(filtered);
+    }
+
+    function renderLogs(logs) {
+      const container = document.getElementById('logsContainer');
+      if (logs.length === 0) {
+        container.innerHTML = `<div style="text-align:center;padding:30px;color:var(--text-muted);">No activity found.</div>`;
+        return;
+      }
+      const icons = { login:'🟢', logout:'🔴', add_patient:'➕', delete_patient:'🗑️', create_account:'👤' };
+      const badges = { login:'badge-login', logout:'badge-logout', add_patient:'badge-add', delete_patient:'badge-delete', create_account:'badge-account' };
+      const labels = { login:'LOGIN', logout:'LOGOUT', add_patient:'ADDED PATIENT', delete_patient:'DELETED PATIENT', create_account:'CREATED ACCOUNT' };
+
+      container.innerHTML = logs.map(log => `
+        <div class="log-row">
+          <div class="log-icon">${icons[log.type]||'📌'}</div>
+          <div style="flex:1;">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <span class="${badges[log.type]||''}">${labels[log.type]||log.type}</span>
+              <span class="log-type">${log.staffName||'Unknown'}</span>
+              <span style="font-size:11px;color:var(--text-muted);">${log.staffEmail||''}</span>
+            </div>
+            ${log.type==='add_patient'    ? `<div class="log-detail">Patient: <strong>${log.patientName}</strong> · Room ${log.room} · Floor ${log.floor} · ${log.dept}</div>`:''}
+            ${log.type==='delete_patient' ? `<div class="log-detail">Deleted: <strong>${log.patientName}</strong> (${log.patientId})</div>`:''}
+            ${log.type==='create_account' ? `<div class="log-detail">New account: <strong>${log.newStaffName}</strong> (${log.newStaffEmail}) · Role: ${log.newStaffRole}</div>`:''}
+            <div class="log-time">🕐 ${formatTimestamp(log.timestamp||log.timestampISO)}</div>
+          </div>
+        </div>`).join('');
+    }
+
+    /* ── STAFF MANAGEMENT ── */
+    async function loadStaffList() {
+      document.getElementById('staffListContainer').innerHTML = `<div style="text-align:center;padding:30px;color:var(--text-muted);">⏳ Loading...</div>`;
+      const staffList = await getAllStaff();
+      if (staffList.length === 0) {
+        document.getElementById('staffListContainer').innerHTML = `<div style="text-align:center;padding:30px;color:var(--text-muted);">No staff accounts found.</div>`;
+        return;
+      }
+      document.getElementById('staffListContainer').innerHTML = staffList.map(s => `
+        <div class="staff-row">
+          <div class="staff-avatar">${(s.name||'?')[0].toUpperCase()}</div>
+          <div style="flex:1;">
+            <div style="font-weight:700;font-size:14px;">${s.name} <span class="role-badge role-${s.role}">${s.role.toUpperCase()}</span></div>
+            <div style="font-size:12px;color:var(--text-muted);">${s.email}</div>
+            <div style="font-size:11px;color:var(--text-muted);">Created: ${formatTimestamp(s.createdAt||s.createdAtISO)} by ${s.createdBy||'—'}</div>
+          </div>
+          ${s.uid !== getLoggedInStaff().uid ? `<button class="btn-del" onclick="removeStaff('${s.uid}','${s.name}')">🗑️</button>`:'<span style="font-size:12px;color:var(--text-muted);">(You)</span>'}
+        </div>`).join('');
+    }
+
+    async function handleCreateStaff() {
+      const name     = document.getElementById('sName').value.trim();
+      const email    = document.getElementById('sEmail').value.trim();
+      const password = document.getElementById('sPassword').value;
+      const role     = document.getElementById('sRole').value;
+      if (!name||!email||!password) { showAlert('staffAlert','error','All fields are required.'); return; }
+      if (password.length < 6)      { showAlert('staffAlert','error','Password must be at least 6 characters.'); return; }
+      const btn = document.getElementById('createStaffBtn');
+      btn.textContent='⏳ Creating...'; btn.disabled=true;
+      try {
+        await createStaffAccount(email, password, name, role);
+        showAlert('staffAlert','success',`✅ Account created for ${name}!`);
+        ['sName','sEmail','sPassword'].forEach(id => document.getElementById(id).value='');
+        loadStaffList();
+      } catch(e) {
+        let msg = e.message;
+        if (e.code==='auth/email-already-in-use') msg='This email already has an account.';
+        if (e.code==='auth/weak-password') msg='Password is too weak (min 6 chars).';
+        showAlert('staffAlert','error','❌ '+msg);
+      }
+      btn.textContent='✅ Create Account'; btn.disabled=false;
+    }
+
+    async function removeStaff(uid, name) {
+      if (!confirm(`Remove staff account for "${name}"? They will lose access immediately.`)) return;
+      try { await deleteStaffProfile(uid); loadStaffList(); }
+      catch(e) { alert('Error: ' + e.message); }
+    }
+  </script>
+</body>
+</html>

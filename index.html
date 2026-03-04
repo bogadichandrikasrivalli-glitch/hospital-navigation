@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!--
+    index.html — HOME PAGE
+    This is the first page visitors see.
+    Contains:
+      • Hospital name and welcome message
+      • Two big navigation buttons
+      • Login button (top-right) for staff
+      • Language selector (top-right)
+  -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>City General Hospital — Navigation</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* ── Hero section (big welcome banner) ── */
+    .hero {
+      background: linear-gradient(135deg, #1a6fb5 0%, #0d4f8c 60%, #00a878 100%);
+      color: #fff;
+      text-align: center;
+      padding: 56px 20px 48px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Decorative circles in background */
+    .hero::before, .hero::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.06);
+    }
+    .hero::before { width: 400px; height: 400px; top: -150px; left: -100px; }
+    .hero::after  { width: 300px; height: 300px; bottom: -120px; right: -60px; }
+
+    .hero-icon   { font-size: 60px; margin-bottom: 14px; animation: fadeUp 0.5s both; }
+    .hero-hosp   { font-family: 'Poppins', sans-serif; font-size: 13px; letter-spacing: 3px;
+                   text-transform: uppercase; opacity: 0.8; margin-bottom: 6px;
+                   animation: fadeUp 0.5s 0.1s both; }
+    .hero-title  { font-family: 'Poppins', sans-serif; font-size: 32px; font-weight: 700;
+                   line-height: 1.2; margin-bottom: 12px;
+                   animation: fadeUp 0.5s 0.15s both; }
+    .hero-desc   { font-size: 16px; opacity: 0.85; max-width: 520px; margin: 0 auto 28px;
+                   animation: fadeUp 0.5s 0.2s both; }
+
+    /* Quick stats row */
+    .hero-stats  { display: flex; justify-content: center; gap: 32px; flex-wrap: wrap;
+                   animation: fadeUp 0.5s 0.25s both; }
+    .stat-item   { text-align: center; }
+    .stat-num    { font-family: 'Poppins', sans-serif; font-size: 26px; font-weight: 700; }
+    .stat-lbl    { font-size: 12px; opacity: 0.75; letter-spacing: 1px; text-transform: uppercase; }
+
+    /* ── Big action cards ── */
+    .big-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      max-width: 760px;
+      margin: 36px auto 0;
+    }
+    @media(max-width:600px) { .big-buttons { grid-template-columns: 1fr; } }
+
+    .action-card {
+      background: #fff;
+      border-radius: 18px;
+      box-shadow: 0 6px 28px rgba(26,111,181,0.12);
+      padding: 36px 28px;
+      text-align: center;
+      text-decoration: none;
+      color: inherit;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      transition: transform 0.2s, box-shadow 0.2s;
+      border: 2px solid transparent;
+      animation: fadeUp 0.5s 0.3s both;
+    }
+    .action-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 12px 36px rgba(26,111,181,0.18);
+      border-color: var(--primary);
+    }
+    .action-card:nth-child(2) { animation-delay: 0.4s; }
+
+    .action-icon { font-size: 52px; }
+    .action-title {
+      font-family: 'Poppins', sans-serif;
+      font-size: 19px;
+      font-weight: 700;
+      color: var(--primary);
+    }
+    .action-desc { font-size: 14px; color: var(--text-muted); }
+    .action-arrow {
+      background: var(--primary);
+      color: #fff;
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      margin-top: 6px;
+    }
+
+    /* ── Info section below cards ── */
+    .info-strip {
+      background: #fff;
+      border-radius: 14px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.07);
+      padding: 20px 28px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-top: 24px;
+      animation: fadeUp 0.5s 0.5s both;
+    }
+    .info-strip-icon { font-size: 30px; flex-shrink: 0; }
+    .info-strip-text { font-size: 14px; color: var(--text-muted); }
+    .info-strip-text strong { color: var(--text); display: block; font-size: 15px; margin-bottom: 2px; }
+
+    /* ── Accessibility features row ── */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-top: 16px;
+    }
+    @media(max-width:520px) { .features { grid-template-columns: 1fr; } }
+
+    .feat-item {
+      background: #f7f9fc;
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+      animation: fadeUp 0.5s both;
+    }
+    .feat-item:nth-child(2) { animation-delay: 0.06s; }
+    .feat-item:nth-child(3) { animation-delay: 0.12s; }
+    .feat-icon { font-size: 26px; margin-bottom: 6px; }
+    .feat-name { font-size: 13px; font-weight: 700; color: var(--primary); }
+    .feat-desc { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================================
+       TOP NAVIGATION BAR
+       ============================================================ -->
+  <nav class="topbar">
+    <!-- Hospital logo / name -->
+    <a href="index.html" class="logo">
+      <img src="logo.jpeg" alt="Hospital Logo" class="logo-img">
+      <span>City General Hospital</span>
+    </a>
+
+    <!-- Right side: language selector + login button -->
+    <div class="topbar-right">
+      <!-- Language dropdown — saves preference to localStorage -->
+      <select class="lang-select" id="langSelect" onchange="saveLang(this.value)" title="Select Language">
+        <option value="en">🌐 English</option>
+        <option value="te">తెలుగు</option>
+        <option value="hi">हिन्दी</option>
+      </select>
+
+      <!-- Staff chip (shown when logged in) -->
+      <span class="staff-chip" id="staffChip" style="display:none;"></span>
+
+      <!-- Login button (hidden when logged in) -->
+      <a href="login.html" class="btn-topbar" id="loginBtn">🔐 Staff Login</a>
+    </div>
+  </nav>
+
+  <!-- ============================================================
+       HERO BANNER
+       ============================================================ -->
+  <section class="hero">
+    <div class="hero-icon">🏥</div>
+    <p class="hero-hosp">City General Hospital — Est. 1985</p>
+    <h1 class="hero-title">Smart Hospital Navigation System</h1>
+    <p class="hero-desc">
+      Find patient rooms, departments, and services easily.
+      Wheelchair-accessible routes and voice guidance available.
+    </p>
+    <!-- Quick stats -->
+    <div class="hero-stats">
+      <div class="stat-item">
+        <div class="stat-num">3</div>
+        <div class="stat-lbl">Floors</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num">10+</div>
+        <div class="stat-lbl">Departments</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num">200+</div>
+        <div class="stat-lbl">Beds</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num">♿</div>
+        <div class="stat-lbl">Accessible</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       MAIN CONTENT — Big navigation buttons
+       ============================================================ -->
+  <div class="page-wrap">
+
+    <!-- Two big action cards -->
+    <div class="big-buttons">
+
+      <!-- Button 1: Find Patient Room -->
+      <a href="patient-search.html" class="action-card">
+        <div class="action-icon">🔍</div>
+        <div class="action-title">Find Patient Room</div>
+        <p class="action-desc">
+          Search for a patient by name or ID and navigate to their room with guided directions.
+        </p>
+        <div class="action-arrow">→</div>
+      </a>
+
+      <!-- Button 2: Find Department -->
+      <a href="department.html" class="action-card">
+        <div class="action-icon">🗺️</div>
+        <div class="action-title">Find Department</div>
+        <p class="action-desc">
+          Navigate to ICU, Pharmacy, X-Ray, Emergency Room, and other hospital departments.
+        </p>
+        <div class="action-arrow">→</div>
+      </a>
+
+    </div><!-- /.big-buttons -->
+
+    <!-- AR Navigation Button -->
+    <a href="ar.html" class="action-card" style="max-width:760px;margin:16px auto 0;flex-direction:row;gap:20px;padding:24px 28px;background:linear-gradient(135deg,#0d2a4a,#1a6fb5);">
+      <div style="font-size:48px;">📷</div>
+      <div style="text-align:left;flex:1;">
+        <div class="action-title" style="color:#fff;font-size:18px;">📷 AR Live Navigation</div>
+        <p class="action-desc" style="color:rgba(255,255,255,0.8);margin-top:4px;">Point your camera and follow 3D arrows in augmented reality — English &amp; Telugu voice guidance included.</p>
+      </div>
+      <div class="action-arrow" style="background:rgba(255,255,255,0.2);">→</div>
+    </a>
+
+    <!-- Wheelchair info strip -->
+    <div class="info-strip">
+      <div class="info-strip-icon">♿</div>
+      <div class="info-strip-text">
+        <strong>Wheelchair Accessible Navigation Available</strong>
+        When searching for a room or department, tick the "Wheelchair Mode" option
+        to get a route that uses only ramps and lifts — no stairs.
+      </div>
+    </div>
+
+    <!-- Features card -->
+    <div class="card" style="margin-top:24px;">
+      <div class="card-title">⭐ System Features</div>
+      <div class="features">
+        <div class="feat-item">
+          <div class="feat-icon">🗣️</div>
+          <div class="feat-name">Voice Guidance</div>
+          <div class="feat-desc">Step-by-step spoken directions in English, Telugu, or Hindi</div>
+        </div>
+        <div class="feat-item">
+          <div class="feat-icon">🗺️</div>
+          <div class="feat-name">Live Map</div>
+          <div class="feat-desc">Animated indoor map showing your path in real time</div>
+        </div>
+        <div class="feat-item">
+          <div class="feat-icon">♿</div>
+          <div class="feat-name">Accessible Routes</div>
+          <div class="feat-desc">Wheelchair-friendly paths via ramps and lifts only</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Staff admin link -->
+    <div style="text-align:center; margin-top:16px; color:var(--text-muted); font-size:14px;">
+      Hospital Staff?
+      <a href="login.html" style="color:var(--primary); font-weight:700; text-decoration:none;">
+        Login here
+      </a>
+      to add patient records.
+    </div>
+
+  </div><!-- /.page-wrap -->
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="script.js"></script>
+  <script>
+    // ── On page load: apply saved language and update staff chip
+    applyStoredLang();
+    updateTopbarStaff();
+  </script>
+</body>
+</html>

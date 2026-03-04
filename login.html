@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Staff Login — City General Hospital</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .login-container { min-height:calc(100vh - 60px); display:flex; align-items:center; justify-content:center; padding:32px 16px; }
+    .login-card { background:#fff; border-radius:18px; box-shadow:0 8px 36px rgba(26,111,181,0.13); padding:44px 40px; width:100%; max-width:420px; animation:fadeUp 0.4s both; }
+    @media(max-width:460px){ .login-card{ padding:28px 22px; } }
+    .login-header { text-align:center; margin-bottom:28px; }
+    .login-header .icon { font-size:50px; margin-bottom:10px; }
+    .login-header h2 { font-family:'Poppins',sans-serif; font-size:22px; font-weight:700; color:var(--primary); margin-bottom:4px; }
+    .login-header p { font-size:14px; color:var(--text-muted); }
+    .divider { height:1px; background:var(--border); margin:20px 0; }
+    .secure-badge { display:flex; align-items:center; gap:8px; background:#edf6ff; border:1px solid #bee3f8; border-radius:8px; padding:10px 14px; margin-bottom:18px; font-size:13px; color:#1a4e7a; }
+  </style>
+</head>
+<body>
+  <nav class="topbar">
+    <a href="index.html" class="logo"><img src="logo.jpeg" alt="Hospital Logo" class="logo-img"><span>City General Hospital</span></a>
+    <div class="topbar-right">
+      <select class="lang-select" id="langSelect" onchange="saveLang(this.value)">
+        <option value="en">🌐 English</option>
+        <option value="te">తెలుగు</option>
+        <option value="hi">हिन्दी</option>
+      </select>
+    </div>
+  </nav>
+
+  <div class="login-container">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="icon">🔐</div>
+        <h2>Staff Login</h2>
+        <p>Authorised hospital staff only</p>
+      </div>
+
+      <div class="secure-badge">🛡️ Secured by Firebase Authentication — only approved accounts can login</div>
+
+      <div class="alert" id="loginAlert"></div>
+
+      <div class="form-group">
+        <label for="staffEmail">📧 Email Address</label>
+        <input type="email" id="staffEmail" placeholder="your@hospital.com" required autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label for="staffPassword">🔑 Password</label>
+        <input type="password" id="staffPassword" placeholder="Enter your password" required autocomplete="current-password"
+          onkeydown="if(event.key==='Enter') handleLogin()">
+      </div>
+
+      <button class="btn btn-primary btn-block btn-lg" style="margin-top:8px;" onclick="handleLogin()" id="loginBtn">
+        🔑 Login
+      </button>
+
+      <div class="divider"></div>
+      <div style="text-align:center;">
+        <a href="index.html" class="back-link" style="justify-content:center;">← Back to Home</a>
+      </div>
+      <div style="margin-top:14px; background:#f7f9fc; border:1px solid var(--border); border-radius:8px; padding:12px; font-size:13px; color:var(--text-muted); text-align:center;">
+        🔒 Don't have an account? Contact your hospital administrator.
+      </div>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="script.js"></script>
+  <script>
+    applyStoredLang();
+
+    // If already logged in, redirect to admin
+    if (getLoggedInStaff()) window.location.href = 'admin.html';
+
+    async function handleLogin() {
+      const email    = document.getElementById('staffEmail').value.trim();
+      const password = document.getElementById('staffPassword').value;
+      const btn      = document.getElementById('loginBtn');
+
+      if (!email || !password) {
+        showAlert('loginAlert','error','Please enter your email and password.');
+        return;
+      }
+
+      btn.textContent = '⏳ Logging in...';
+      btn.disabled    = true;
+
+      try {
+        await loginWithEmail(email, password);
+        window.location.href = 'admin.html';
+      } catch(e) {
+        let msg = 'Login failed. Please try again.';
+        if (e.code === 'auth/user-not-found')    msg = '❌ No account found with this email.';
+        if (e.code === 'auth/wrong-password')     msg = '❌ Incorrect password.';
+        if (e.code === 'auth/invalid-email')      msg = '❌ Invalid email address.';
+        if (e.code === 'auth/too-many-requests')  msg = '❌ Too many attempts. Try again later.';
+        showAlert('loginAlert','error', msg);
+        btn.textContent = '🔑 Login';
+        btn.disabled    = false;
+      }
+    }
+  </script>
+</body>
+</html>
