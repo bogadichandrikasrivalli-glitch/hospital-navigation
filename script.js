@@ -254,298 +254,211 @@ function _mergeConsecutive(waypoints) {
   return out;
 }
 
-/* ============================================================
-   6. MULTILINGUAL VOICE GUIDANCE  (v4 — lag fix + Telugu TTS)
-   ──────────────────────────────────────────────────────────
-   Strategy:
-     • English / Hindi  → Web Speech API (browser built-in)
-     • Telugu           → Google Translate TTS audio (mp3)
-       because most devices don't have a "te-IN" voice installed.
-     • Zero lag: audio is PRE-FETCHED for the NEXT step while
-       the current step is still speaking.
-     • No 80ms delay — speak fires immediately.
+/*    Telugu Voice — uses Web Speech API with te-IN.
+   If browser has no Telugu voice, speaks English translation.
    ============================================================ */
 
-/* ── Voice state ── */
-let _voicesReady = false;
-let _voiceList   = [];
-let _currentAudio = null;   // HTMLAudioElement for Telugu/Hindi TTS
-let _isSpeaking   = false;
-let _pendingSpeak = null;   // { text, lang } — next queued item
+/* ══════════════════════════════════════════════════════════
+   VOICE ENGINE
+   English/Hindi → Web Speech API (browser built-in)
+   Telugu        → VoiceRSS API (real Telugu audio, free)
+   ══════════════════════════════════════════════════════════ */
 
-/* ── BCP-47 map ── */
+let _voiceList    = [];
+let _voicesReady  = false;
+let _isSpeaking   = false;
+let _pendingSpeak = null;
+let _currentAudio = null;
+
 const _BCP47 = { en: 'en-IN', te: 'te-IN', hi: 'hi-IN' };
 
-/* ── Google TTS language codes ── */
-const _GTTS  = { en: 'en-IN', te: 'te', hi: 'hi' };
+/* VoiceRSS API — free plan, real Telugu TTS, works everywhere */
+const _VRSS_KEY = 'b2b64c0910754b2f8ab5e445fd7beace'; // free key
+const _VRSS_LANG = { en: 'en-in', te: 'te-in', hi: 'hi-in' };
 
-/**
- * _loadVoices()
- * Eagerly cache browser voices. Called once on script load.
- */
+/* Build VoiceRSS audio URL for Telugu/Hindi */
+function _voiceRSSUrl(text, lang) {
+  const l = _VRSS_LANG[lang] || 'en-in';
+  return `https://api.voicerss.org/?key=${_VRSS_KEY}&hl=${l}&src=${encodeURIComponent(text)}&f=48khz_16bit_mono&c=MP3&r=0`;
+}
+
+/* Load all available browser voices */
 function _loadVoices() {
-  const v = speechSynthesis.getVoices();
-  if (v.length > 0) {
-    _voiceList   = v;
-    _voicesReady = true;
-  } else {
-    const onReady = () => {
-      _voiceList   = speechSynthesis.getVoices();
-      _voicesReady = true;
-    };
-    speechSynthesis.addEventListener('voiceschanged', onReady, { once: true });
-    // Polling fallback for browsers that never fire voiceschanged
-    const t = setInterval(() => {
-      const vv = speechSynthesis.getVoices();
-      if (vv.length > 0) { clearInterval(t); _voiceList = vv; _voicesReady = true; }
-    }, 150);
-    setTimeout(() => clearInterval(t), 6000);
-  }
+  const load = () => {
+    _voiceList   = speechSynthesis.getVoices();
+    _voicesReady = _voiceList.length > 0;
+  };
+  load();
+  speechSynthesis.addEventListener('voiceschanged', load);
+  const t = setInterval(() => {
+    if (_voiceList.length > 0) { clearInterval(t); return; }
+    _voiceList   = speechSynthesis.getVoices();
+    _voicesReady = _voiceList.length > 0;
+  }, 200);
+  setTimeout(() => clearInterval(t), 8000);
 }
 
-/**
- * _hasBrowserVoice(lang)
- * Returns true if the browser has a native voice for this language.
- */
-function _hasBrowserVoice(lang) {
-  const prefix = (_BCP47[lang] || lang).split('-')[0];
-  return _voiceList.some(v => v.lang.startsWith(prefix));
-}
-
-/**
- * _pickVoice(lang)
- * Select the best available browser voice.
- */
+/* Pick best browser voice for language */
 function _pickVoice(lang) {
-  const bcp47  = _BCP47[lang] || 'en-IN';
-  const prefix = bcp47.split('-')[0];
-  return _voiceList.find(v => v.lang === bcp47)
-      || _voiceList.find(v => v.lang.startsWith(prefix))
+  const bcp = _BCP47[lang] || 'en-IN';
+  const pre = bcp.split('-')[0];
+  return _voiceList.find(v => v.lang === bcp)
+      || _voiceList.find(v => v.lang.startsWith(pre))
       || _voiceList.find(v => v.lang.startsWith('en'))
-      || null;
+      || (_voiceList.length > 0 ? _voiceList[0] : null);
+}
+
+/* Check if browser has native voice for lang */
+function _hasBrowserVoice(lang) {
+  const pre = (_BCP47[lang] || lang).split('-')[0];
+  return _voiceList.some(v => v.lang.startsWith(pre));
 }
 
 /**
- * _gttsSrc(text, lang)
- * Build a Google Translate TTS URL for the given text and language.
- * Works for Telugu (te), Hindi (hi), and English (en).
- */
-function _gttsSrc(text, lang) {
-  const tl  = _GTTS[lang] || 'en';
-  return `https://translate.google.com/translate_tts?ie=UTF-8&tl=${tl}&q=${encodeURIComponent(text)}&client=tw-ob`;
-}
-
-/**
- * speak(text, lang)
- * Main entry point. Speaks 'text' in the chosen language with ZERO lag.
- * If something is already playing, the new item replaces the pending queue
- * so only the most-recent direction is spoken next (no stale pile-up).
+ * speak(text, lang) — fire and forget
  */
 function speak(text, lang) {
   const l = lang || getCurrentLang();
-
-  // Always cancel whatever is in flight — new direction takes priority
   _cancelCurrent();
-
-  _pendingSpeak = null;
   _isSpeaking   = true;
+  _pendingSpeak = null;
+  _doSpeak(text, l, () => { _isSpeaking = false; });
+}
 
-  // Route to the right engine
-  if (l === 'te' || !_hasBrowserVoice(l)) {
-    _speakViaGTTS(text, l);
+/**
+ * speakWithCallback(text, lang, onDone)
+ * Speak and call onDone() when finished.
+ * Used by map animation to pause dot until voice ends.
+ */
+function speakWithCallback(text, lang, onDone) {
+  const l = lang || getCurrentLang();
+  _cancelCurrent();
+  _isSpeaking = true;
+  setTimeout(() => {
+    _doSpeak(text, l, () => {
+      _isSpeaking = false;
+      if (onDone) setTimeout(onDone, 800);
+    });
+  }, 150);
+}
+
+/**
+ * _doSpeak(text, lang, onDone)
+ * Core speak function.
+ *
+ * Telugu/Hindi → VoiceRSS API (real native audio, free)
+ * English      → Web Speech API (browser built-in)
+ * Fallback     → Web Speech API in English
+ */
+function _doSpeak(text, lang, onDone) {
+  if (lang === 'te' || lang === 'hi') {
+    // Use VoiceRSS for real Telugu / Hindi audio
+    _speakViaVoiceRSS(text, lang, onDone);
   } else {
-    _speakViaBrowser(text, l);
+    _speakViaBrowser(text, lang, onDone);
   }
 }
 
 /**
- * _speakViaBrowser(text, lang)
- * Use Web Speech API — for English and Hindi (when voice is available).
- * NO cancel+delay trick: we already cancelled above in speak().
+ * _speakViaVoiceRSS(text, lang, onDone)
+ * Fetches real Telugu/Hindi audio from VoiceRSS free API.
+ * Works on ALL browsers and devices — no voice install needed!
  */
-function _speakViaBrowser(text, lang) {
-  if (!window.speechSynthesis) { _isSpeaking = false; return; }
-  speechSynthesis.cancel(); // clear any stuck utterances
+function _speakViaVoiceRSS(text, lang, onDone) {
+  try {
+    const url   = _voiceRSSUrl(text, lang);
+    const audio = new Audio();
+    _currentAudio = audio;
 
-  const utter   = new SpeechSynthesisUtterance(text);
-  utter.lang    = _BCP47[lang] || 'en-IN';
-  utter.rate    = 0.85;   // slightly slower = clearer pronunciation
-  utter.pitch   = 1.05;  // slightly higher = more natural
-  utter.volume  = 1.0;
+    audio.src    = url;
+    audio.volume = 1.0;
+
+    audio.oncanplaythrough = () => {
+      audio.play().catch(err => {
+        console.warn('VoiceRSS play blocked:', err);
+        _currentAudio = null;
+        // Fallback to browser speech
+        _speakViaBrowser(text, lang, onDone);
+      });
+    };
+
+    audio.onended = () => {
+      _currentAudio = null;
+      if (onDone) onDone();
+    };
+
+    audio.onerror = () => {
+      console.warn('VoiceRSS failed, using browser fallback');
+      _currentAudio = null;
+      _speakViaBrowser(text, lang, onDone);
+    };
+
+    // Timeout safety — if audio doesn't load in 5s, use fallback
+    setTimeout(() => {
+      if (_currentAudio === audio) {
+        audio.src = '';
+        _currentAudio = null;
+        _speakViaBrowser(text, lang, onDone);
+      }
+    }, 5000);
+
+    audio.load();
+
+  } catch(e) {
+    console.error('VoiceRSS error:', e);
+    _speakViaBrowser(text, lang, onDone);
+  }
+}
+
+/**
+ * _speakViaBrowser(text, lang, onDone)
+ * Web Speech API — for English (and fallback for Telugu/Hindi)
+ */
+function _speakViaBrowser(text, lang, onDone) {
+  if (!window.speechSynthesis) { if (onDone) onDone(); return; }
+  speechSynthesis.cancel();
+
+  const utter  = new SpeechSynthesisUtterance(text);
+  utter.lang   = _BCP47[lang] || 'en-IN';
+  utter.rate   = 0.85;
+  utter.pitch  = 1.05;
+  utter.volume = 1.0;
 
   const doSpeak = () => {
     const voice = _pickVoice(lang);
     if (voice) utter.voice = voice;
-
-    utter.onend = utter.onerror = () => {
-      _isSpeaking = false;
-      if (_pendingSpeak) {
-        const next = _pendingSpeak;
-        _pendingSpeak = null;
-        speak(next.text, next.lang);
-      }
-    };
-
+    utter.onend  = () => { if (onDone) onDone(); };
+    utter.onerror = () => { if (onDone) onDone(); };
     speechSynthesis.speak(utter);
   };
 
   if (_voicesReady) {
-    doSpeak();
+    setTimeout(doSpeak, 100);
   } else {
     speechSynthesis.addEventListener('voiceschanged', () => {
       _voiceList   = speechSynthesis.getVoices();
       _voicesReady = true;
       doSpeak();
     }, { once: true });
+    setTimeout(doSpeak, 600);
   }
 }
 
-/**
- * _speakViaGTTS(text, lang)
- * Use Google Translate TTS audio for Telugu (and Hindi fallback).
- * Creates an <audio> element and plays the mp3 stream directly.
- * This gives REAL Telugu voice — not English with Telugu text.
- */
-function _speakViaGTTS(text, lang) {
-  try {
-    const src   = _gttsSrc(text, lang);
-    const audio = new Audio(src);
-    audio.volume = 1.0;
-    _currentAudio = audio;
-
-    audio.onended = audio.onerror = () => {
-      _isSpeaking   = false;
-      _currentAudio = null;
-      if (_pendingSpeak) {
-        const next = _pendingSpeak;
-        _pendingSpeak = null;
-        speak(next.text, next.lang);
-      }
-    };
-
-    // If Google TTS fails (e.g. offline), fall back to browser
-    audio.onerror = () => {
-      console.warn('Google TTS failed, falling back to browser speech.');
-      _isSpeaking   = false;
-      _currentAudio = null;
-      _speakViaBrowser(text, lang);
-    };
-
-    audio.play().catch(() => {
-      // Autoplay blocked — browser needs a user gesture first
-      // Queue it for the next user interaction
-      _isSpeaking = false;
-      _pendingSpeak = { text, lang };
-    });
-
-  } catch (e) {
-    console.error('GTTS error:', e);
-    _isSpeaking = false;
-    _speakViaBrowser(text, lang);
-  }
-}
-
-/**
- * _cancelCurrent()
- * Immediately stop whatever is currently playing.
- */
-function _cancelCurrent() {
-  // Stop Web Speech
-  if (window.speechSynthesis) speechSynthesis.cancel();
-  // Stop audio element (Telugu)
-  if (_currentAudio) {
-    _currentAudio.pause();
-    _currentAudio.src = '';
-    _currentAudio = null;
-  }
-}
-
-/** Public: stop all speech and clear queue. */
+/** Stop all speech immediately */
 function stopSpeaking() {
-  _pendingSpeak = null;
+  if (window.speechSynthesis) speechSynthesis.cancel();
+  if (_currentAudio) { _currentAudio.pause(); _currentAudio = null; }
   _isSpeaking   = false;
-  _cancelCurrent();
-}
-
-/**
- * speakWithCallback(text, lang, onDone)
- * Speak text and call onDone() when the voice finishes.
- * Used by the animation loop to pause the dot until voice is done.
- * After voice ends, waits 600ms before calling onDone so the user
- * has a moment to process the instruction before the dot moves.
- */
-function speakWithCallback(text, lang, onDone) {
-  const l = lang || getCurrentLang();
-  _cancelCurrent();
   _pendingSpeak = null;
-  _isSpeaking   = true;
-
-  const done = () => {
-    _isSpeaking = false;
-    if (onDone) setTimeout(onDone, 800);  // 800ms pause after speech ends — dot waits before moving
-  };
-
-  if (l === 'te' || !_hasBrowserVoice(l)) {
-    _speakViaGTTSWithCB(text, l, done);
-  } else {
-    _speakViaBrowserWithCB(text, l, done);
-  }
 }
 
-/** Browser speech with end-callback. */
-function _speakViaBrowserWithCB(text, lang, onDone) {
-  if (!window.speechSynthesis) { if (onDone) onDone(); return; }
-
-  // Cancel any stuck speech before starting new one
-  speechSynthesis.cancel();
-
-  const utter  = new SpeechSynthesisUtterance(text);
-  utter.lang   = _BCP47[lang] || 'en-IN';
-  utter.rate   = 0.85;   // clearer, natural pace
-  utter.pitch  = 1.05;   // natural tone
-  utter.volume = 1.0;
-
-  const doSpeak = () => {
-    const voice = _pickVoice(lang);
-    if (voice) utter.voice = voice;
-    // Small delay after cancel() so browser resets cleanly
-    setTimeout(() => {
-      utter.onend  = () => { if (onDone) onDone(); };
-      utter.onerror = () => { if (onDone) onDone(); };
-      speechSynthesis.speak(utter);
-    }, 120);
-  };
-
-  if (_voicesReady) doSpeak();
-  else speechSynthesis.addEventListener('voiceschanged', () => {
-    _voiceList = speechSynthesis.getVoices(); _voicesReady = true; doSpeak();
-  }, { once: true });
-}
-
-/** Google TTS with end-callback. */
-function _speakViaGTTSWithCB(text, lang, onDone) {
-  try {
-    const audio = new Audio(_gttsSrc(text, lang));
-    audio.volume = 1.0;
-    _currentAudio = audio;
-    audio.onended = () => { _currentAudio = null; if (onDone) onDone(); };
-    audio.onerror = () => {
-      _currentAudio = null;
-      console.warn('Google TTS failed, falling back to browser.');
-      _speakViaBrowserWithCB(text, lang, onDone);
-    };
-    audio.play().catch(() => {
-      // Autoplay blocked — just call onDone so navigation doesn't freeze
-      _currentAudio = null;
-      if (onDone) onDone();
-    });
-  } catch(e) {
-    if (onDone) onDone();
-  }
-}
+/** Alias used in map.html */
+function _cancelCurrent() { stopSpeaking(); }
 
 // Pre-load voices immediately when the script loads
 if (window.speechSynthesis) _loadVoices();
+
+
 
 /* ============================================================
    LANGUAGE UTILITIES
