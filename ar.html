@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>AR Navigation — City General Hospital</title>
+
+  <!-- A-Frame -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.2/aframe.min.js"></script>
+  <!-- AR.js for A-Frame (camera-based, no marker needed) -->
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+
+  <style>
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --primary:   #1a6fb5;
+      --secondary: #00a878;
+      --danger:    #e63946;
+      --dark:      rgba(10, 25, 50, 0.88);
+      --white:     #ffffff;
+      --radius:    14px;
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: #000;
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    /* Hide A-Frame VR button */
+    .a-enter-vr, .a-orientation-modal { display: none !important; }
+
+    /* AR Scene — fullscreen background */
+    a-scene {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      z-index: 0;
+    }
+
+    /* ════════════════════════════════
+       PERMISSION SCREEN
+       ════════════════════════════════ */
+    #permScreen {
+      position: fixed; inset: 0; z-index: 999;
+      background: linear-gradient(160deg, #0d2a4a 0%, #1a6fb5 55%, #00a878 100%);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 18px; padding: 32px; text-align: center;
+    }
+    #permScreen.hide { display: none; }
+
+    .perm-icon  { font-size: 72px; }
+    .perm-title { font-size: 26px; font-weight: 700; color: #fff; }
+    .perm-desc  { font-size: 15px; color: rgba(255,255,255,0.82); max-width: 300px; line-height: 1.65; }
+    .perm-btn {
+      margin-top: 8px;
+      background: #fff; color: var(--primary);
+      border: none; border-radius: 14px;
+      padding: 15px 36px; font-size: 17px; font-weight: 700;
+      cursor: pointer; box-shadow: 0 6px 24px rgba(0,0,0,0.22);
+      transition: transform 0.15s;
+    }
+    .perm-btn:hover { transform: scale(1.04); }
+    .perm-note { font-size: 12px; color: rgba(255,255,255,0.5); margin-top: 4px; }
+
+    /* ════════════════════════════════
+       TOP BAR
+       ════════════════════════════════ */
+    #topBar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: linear-gradient(180deg, rgba(10,25,50,0.90) 0%, transparent 100%);
+      padding: 14px 18px 30px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .top-logo {
+      display: flex; align-items: center; gap: 8px;
+      color: #fff; font-size: 15px; font-weight: 700;
+      text-decoration: none;
+    }
+    .back-btn {
+      background: rgba(255,255,255,0.15);
+      border: 1.5px solid rgba(255,255,255,0.3);
+      color: #fff; border-radius: 9px;
+      padding: 7px 15px; font-size: 13px; font-weight: 700;
+      cursor: pointer; text-decoration: none;
+      backdrop-filter: blur(8px);
+      transition: background 0.2s;
+    }
+    .back-btn:hover { background: rgba(255,255,255,0.28); }
+
+    /* ════════════════════════════════
+       DIRECTION CARD (centre bottom)
+       ════════════════════════════════ */
+    #dirCard {
+      position: fixed;
+      bottom: 170px; left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
+      background: var(--dark);
+      border: 1.5px solid rgba(255,255,255,0.18);
+      border-radius: 22px;
+      padding: 20px 30px 16px;
+      text-align: center;
+      min-width: 270px; max-width: 340px;
+      backdrop-filter: blur(14px);
+      box-shadow: 0 10px 40px rgba(0,0,0,0.45);
+      transition: all 0.35s ease;
+    }
+
+    #arrowEmoji {
+      font-size: 62px;
+      line-height: 1;
+      display: block;
+      margin-bottom: 10px;
+      transition: transform 0.5s cubic-bezier(0.34,1.56,0.64,1);
+      filter: drop-shadow(0 0 14px rgba(0,200,120,0.55));
+      animation: bounce 1.4s ease-in-out infinite;
+    }
+    @keyframes bounce {
+      0%,100% { transform: translateY(0); }
+      50%      { transform: translateY(-9px); }
+    }
+
+    #dirLabel {
+      font-size: 22px; font-weight: 700; color: #fff;
+      margin-bottom: 5px;
+    }
+    #dirSub {
+      font-size: 13px; color: rgba(255,255,255,0.58);
+      margin-bottom: 12px;
+    }
+
+    /* Step dots */
+    .dots { display: flex; gap: 7px; justify-content: center; }
+    .dot  {
+      width: 9px; height: 9px; border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+      transition: all 0.3s;
+    }
+    .dot.active { background: var(--secondary); transform: scale(1.35); }
+    .dot.done   { background: rgba(0,168,120,0.45); }
+
+    /* ════════════════════════════════
+       BOTTOM CONTROLS
+       ════════════════════════════════ */
+    #controls {
+      position: fixed;
+      bottom: 0; left: 0; right: 0; z-index: 100;
+      background: linear-gradient(0deg, rgba(10,25,50,0.95) 0%, transparent 100%);
+      padding: 18px 18px 30px;
+    }
+
+    .lang-row {
+      display: flex; justify-content: center; margin-bottom: 13px;
+    }
+    .lang-sel {
+      background: rgba(255,255,255,0.12);
+      border: 1.5px solid rgba(255,255,255,0.25);
+      color: #fff; border-radius: 22px;
+      padding: 8px 18px; font-size: 14px; font-weight: 600;
+      cursor: pointer; outline: none;
+      backdrop-filter: blur(6px);
+    }
+    .lang-sel option { background: #1a3a5c; color: #fff; }
+
+    .btn-row { display: flex; gap: 9px; justify-content: center; flex-wrap: wrap; }
+
+    .ar-btn {
+      padding: 12px 20px; border-radius: 12px;
+      font-size: 14px; font-weight: 700;
+      border: none; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 6px;
+      transition: transform 0.15s, opacity 0.15s;
+      white-space: nowrap;
+    }
+    .ar-btn:hover  { transform: translateY(-2px); }
+    .ar-btn:active { transform: scale(0.96); }
+    .btn-blue    { background: var(--primary); color: #fff; }
+    .btn-green   { background: var(--secondary); color: #fff; }
+    .btn-ghost   { background: rgba(255,255,255,0.14); border: 1.5px solid rgba(255,255,255,0.28); color: #fff; }
+    .btn-red     { background: var(--danger); color: #fff; }
+
+    /* Step counter pill (top-right) */
+    #stepPill {
+      position: fixed; top: 66px; right: 16px; z-index: 100;
+      background: var(--dark);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 12px; padding: 8px 14px;
+      color: #fff; text-align: center;
+      backdrop-filter: blur(8px);
+    }
+    #stepPill .big { font-size: 24px; font-weight: 700; color: var(--secondary); display: block; line-height: 1; }
+    #stepPill .sm  { font-size: 11px; color: rgba(255,255,255,0.55); }
+
+    /* ════════════════════════════════
+       ARRIVED OVERLAY
+       ════════════════════════════════ */
+    #arrivedOverlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,168,120,0.88);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 16px; padding: 32px;
+      text-align: center;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.5s;
+      backdrop-filter: blur(10px);
+    }
+    #arrivedOverlay.show { opacity: 1; pointer-events: all; }
+    .arrived-icon  { font-size: 88px; animation: pop 0.6s cubic-bezier(0.34,1.56,0.64,1) both; }
+    @keyframes pop { from { transform: scale(0); } to { transform: scale(1); } }
+    .arrived-title { font-size: 34px; font-weight: 700; color: #fff; }
+    .arrived-sub   { font-size: 16px; color: rgba(255,255,255,0.85); }
+    .arrived-btns  { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
+
+    /* Hidden class */
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════
+     PERMISSION / WELCOME SCREEN
+     ══════════════════════════════ -->
+<div id="permScreen">
+  <div class="perm-icon">📷</div>
+  <div class="perm-title">AR Live Navigation</div>
+  <div class="perm-desc">
+    This page opens your <strong>camera</strong> and shows
+    3D arrows to guide you through the hospital.<br><br>
+    Please tap below and <strong>allow camera access</strong>
+    when your browser asks.
+  </div>
+  <button class="perm-btn" onclick="startAR()">📷 Open Camera &amp; Start</button>
+  <div class="perm-note">Best on mobile Chrome or Safari · Requires internet</div>
+</div>
+
+<!-- ══════════════════════════════
+     A-FRAME AR SCENE
+     ══════════════════════════════ -->
+<a-scene
+  id="arScene"
+  embedded
+  arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false;"
+  vr-mode-ui="enabled: false"
+  renderer="antialias: true; logarithmicDepthBuffer: true;"
+  class="hidden"
+>
+
+  <!-- User camera -->
+  <a-camera position="0 1.6 0"
+    look-controls="enabled: true; reverseMouseDrag: false;"
+    wasd-controls="enabled: false">
+  </a-camera>
+
+  <!-- ── Navigation Arrow Group ── -->
+  <a-entity id="navArrow" position="0 1.5 -3">
+
+    <!-- Shaft -->
+    <a-cylinder id="shaft"
+      height="1.1" radius="0.09"
+      color="#00a878" opacity="0.96">
+    </a-cylinder>
+
+    <!-- Head (cone) -->
+    <a-cone id="head"
+      position="0 0.78 0"
+      height="0.50" radius-bottom="0.25" radius-top="0"
+      color="#00ff99" opacity="0.99">
+    </a-cone>
+
+    <!-- Spinning ring -->
+    <a-torus position="0 -0.55 0"
+      radius="0.28" radius-tubular="0.035"
+      color="#1a6fb5" opacity="0.75"
+      animation="property:rotation; to:0 360 0; loop:true; dur:2800; easing:linear;">
+    </a-torus>
+
+    <!-- Pulsing halo -->
+    <a-sphere position="0 0 0" radius="0.4"
+      color="#00a878" opacity="0.10"
+      animation="property:scale; from:0.8 0.8 0.8; to:1.4 1.4 1.4;
+                 loop:true; dur:1300; easing:easeInOutSine; direction:alternate;">
+    </a-sphere>
+
+  </a-entity>
+
+  <!-- ── Destination floor ring (shown on arrival) ── -->
+  <a-entity id="destRing" position="0 0.05 -3" visible="false">
+    <a-torus radius="1.1" radius-tubular="0.06"
+      color="#00ff99" opacity="0.6"
+      animation="property:rotation; to:0 360 0; loop:true; dur:2000; easing:linear;">
+    </a-torus>
+    <a-cylinder height="0.04" radius="1.1"
+      color="#00a878" opacity="0.22"
+      animation="property:scale; from:1 1 1; to:1.35 1 1.35;
+                 loop:true; dur:900; direction:alternate;">
+    </a-cylinder>
+  </a-entity>
+
+  <a-light type="ambient"     intensity="0.85"></a-light>
+  <a-light type="directional" position="1 3 2" intensity="0.55"></a-light>
+
+</a-scene>
+
+<!-- ══════════════════════════════
+     UI OVERLAY
+     ══════════════════════════════ -->
+
+<!-- Top bar -->
+<div id="topBar" class="hidden">
+  <a href="index.html" class="top-logo">
+    <img src="logo.jpeg" alt="Logo" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.6);"><span>City General Hospital</span>
+  </a>
+  <a href="map.html" class="back-btn">← Map</a>
+</div>
+
+<!-- Step pill -->
+<div id="stepPill" class="hidden">
+  <span class="big" id="stepNum">1</span>
+  <span class="sm">of <span id="stepTotal">6</span></span>
+</div>
+
+<!-- Direction card -->
+<div id="dirCard" class="hidden">
+  <span id="arrowEmoji">⬆️</span>
+  <div id="dirLabel">Starting…</div>
+  <div id="dirSub">Follow the arrow</div>
+  <div class="dots" id="dots"></div>
+</div>
+
+<!-- Controls -->
+<div id="controls" class="hidden">
+  <div class="lang-row">
+    <select class="lang-sel" id="langSel" onchange="changeLang(this.value)">
+      <option value="en">🌐 English</option>
+      <option value="te">🇮🇳 తెలుగు (Telugu)</option>
+      <option value="hi">🇮🇳 हिन्दी (Hindi)</option>
+    </select>
+  </div>
+  <div class="btn-row">
+    <button class="ar-btn btn-green"  onclick="startNav()">▶️ Start</button>
+    <button class="ar-btn btn-ghost"  onclick="repeatSpeak()">🔊 Repeat</button>
+    <button class="ar-btn btn-ghost"  id="muteBtn" onclick="toggleMute()">🔇 Mute</button>
+    <button class="ar-btn btn-ghost"  onclick="restartNav()">🔄 Restart</button>
+  </div>
+</div>
+
+<!-- Arrived overlay -->
+<div id="arrivedOverlay">
+  <div class="arrived-icon">✅</div>
+  <div class="arrived-title">You Have Arrived!</div>
+  <div class="arrived-sub" id="arrivedSub">Destination reached</div>
+  <div class="arrived-btns">
+    <button class="ar-btn btn-ghost" onclick="restartNav()">🔄 Navigate Again</button>
+    <a href="map.html" class="ar-btn btn-ghost">← Back to Map</a>
+  </div>
+</div>
+
+<!-- ══════════════════════════════
+     SCRIPT
+     ══════════════════════════════ -->
+<script>
+'use strict';
+
+/* ─────────────────────────────────────
+   NAV STEPS
+   Each step has:
+     dirKey      — key for translation lookup
+     emoji       — shown in direction card
+     arrowRot    — A-Frame rotation of the 3D arrow
+     sub         — small subtitle text
+     stepColor   — colour of 3D arrow shaft + head
+   ───────────────────────────────────── */
+const STEPS = [
+  { dirKey:'start',    emoji:'🚪', arrowRot:'0 0 0',    sub:'From the main entrance',        color:'#1a6fb5' },
+  { dirKey:'straight', emoji:'⬆️', arrowRot:'0 0 0',    sub:'Walk forward along the corridor', color:'#00a878' },
+  { dirKey:'right',    emoji:'➡️', arrowRot:'0 90 0',   sub:'Turn right at the junction',     color:'#f4a261' },
+  { dirKey:'straight', emoji:'⬆️', arrowRot:'0 0 0',    sub:'Continue straight ahead',        color:'#00a878' },
+  { dirKey:'left',     emoji:'⬅️', arrowRot:'0 -90 0',  sub:'Turn left towards the ward',     color:'#f4a261' },
+  { dirKey:'reached',  emoji:'✅', arrowRot:'0 0 0',    sub:'You have arrived!',              color:'#00ff99' },
+];
+
+/* ─────────────────────────────────────
+   TRANSLATIONS
+   ───────────────────────────────────── */
+const T = {
+  en: {
+    start:    'Starting AR navigation. Walk straight from the main entrance.',
+    straight: 'Continue straight ahead.',
+    right:    'Turn right.',
+    left:     'Turn left.',
+    reached:  'You have arrived at your destination! Well done.',
+  },
+  te: {
+    start:    'ఏఆర్ నావిగేషన్ ప్రారంభమవుతోంది. ప్రధాన ద్వారం నుండి నేరుగా వెళ్లండి.',
+    straight: 'నేరుగా వెళ్లండి.',
+    right:    'కుడివైపు తిరగండి.',
+    left:     'ఎడమవైపు తిరగండి.',
+    reached:  'మీరు గమ్యస్థానానికి చేరుకున్నారు!',
+  },
+  hi: {
+    start:    'एआर नेविगेशन शुरू हो रही है। मुख्य द्वार से सीधे जाएँ।',
+    straight: 'सीधे आगे जाएँ।',
+    right:    'दाएं मुड़ें।',
+    left:     'बाएं मुड़ें।',
+    reached:  'आप अपने गंतव्य पर पहुँच गए!',
+  },
+};
+
+const LABELS = {
+  en: { start:'Starting…', straight:'Go Straight', right:'Turn Right',      left:'Turn Left',      reached:'Arrived! ✅' },
+  te: { start:'ప్రారంభం…', straight:'నేరుగా వెళ్లండి', right:'కుడివైపు తిరగండి', left:'ఎడమవైపు తిరగండి', reached:'చేరుకున్నారు! ✅' },
+  hi: { start:'शुरू…',     straight:'सीधे जाएँ',   right:'दाएं मुड़ें',    left:'बाएं मुड़ें',    reached:'पहुँच गए! ✅' },
+};
+
+const BCP47 = { en:'en-IN', te:'te-IN', hi:'hi-IN' };
+
+/* ─────────────────────────────────────
+   STATE
+   ───────────────────────────────────── */
+let lang        = 'en';
+let step        = 0;
+let running     = false;
+let muted       = false;
+let timer       = null;
+let voiceList   = [];
+
+/* ─────────────────────────────────────
+   VOICE
+   ───────────────────────────────────── */
+function loadVoices() {
+  voiceList = speechSynthesis.getVoices();
+  if (!voiceList.length)
+    speechSynthesis.addEventListener('voiceschanged', () => { voiceList = speechSynthesis.getVoices(); }, { once:true });
+}
+
+function speak(text) {
+  if (muted || !window.speechSynthesis) return;
+  speechSynthesis.cancel();
+  const u   = new SpeechSynthesisUtterance(text);
+  u.lang    = BCP47[lang] || 'en-IN';
+  u.rate    = 0.88;
+  u.pitch   = 1.0;
+  u.volume  = 1.0;
+  const pfx = u.lang.split('-')[0];
+  u.voice   = voiceList.find(v => v.lang === u.lang)
+           || voiceList.find(v => v.lang.startsWith(pfx))
+           || voiceList.find(v => v.lang.startsWith('en'))
+           || null;
+  speechSynthesis.speak(u);
+}
+
+function repeatSpeak() {
+  speak(T[lang][STEPS[step].dirKey]);
+}
+
+function toggleMute() {
+  muted = !muted;
+  document.getElementById('muteBtn').textContent = muted ? '🔈 Unmute' : '🔇 Mute';
+  if (muted) speechSynthesis.cancel();
+}
+
+function changeLang(l) {
+  lang = l;
+  localStorage.setItem('navLang', l);
+  showStep(step); // redraw labels in new language
+}
+
+/* ─────────────────────────────────────
+   STEPS
+   ───────────────────────────────────── */
+function buildDots() {
+  const c = document.getElementById('dots');
+  c.innerHTML = STEPS.map((_,i) => `<div class="dot" id="d${i}"></div>`).join('');
+  document.getElementById('stepTotal').textContent = STEPS.length;
+}
+
+function showStep(i) {
+  if (i >= STEPS.length) { onArrived(); return; }
+  step = i;
+
+  const s = STEPS[i];
+
+  // Direction card
+  document.getElementById('arrowEmoji').textContent = s.emoji;
+  document.getElementById('dirLabel').textContent   = LABELS[lang][s.dirKey] || s.dirKey;
+  document.getElementById('dirSub').textContent     = s.sub;
+  document.getElementById('stepNum').textContent    = i + 1;
+
+  // Dots
+  document.querySelectorAll('.dot').forEach((d, idx) => {
+    d.className = 'dot' + (idx < i ? ' done' : idx === i ? ' active' : '');
+  });
+
+  // Rotate 3D arrow
+  const arrow = document.getElementById('navArrow');
+  if (arrow) {
+    arrow.setAttribute('rotation', s.arrowRot);
+    const shaft = document.getElementById('shaft');
+    const head  = document.getElementById('head');
+    if (shaft) shaft.setAttribute('color', s.color);
+    if (head)  head.setAttribute('color', s.color);
+  }
+
+  // Voice
+  speak(T[lang][s.dirKey]);
+
+  if (s.dirKey === 'reached') setTimeout(onArrived, 1600);
+}
+
+/* ─────────────────────────────────────
+   NAVIGATION CONTROL
+   ───────────────────────────────────── */
+function startNav() {
+  if (running) return;
+  running = true;
+  showStep(step);
+  scheduleNext();
+}
+
+function scheduleNext() {
+  clearTimeout(timer);
+  timer = setTimeout(() => {
+    if (!running) return;
+    const next = step + 1;
+    if (next < STEPS.length) { showStep(next); scheduleNext(); }
+  }, 6000); // 6s per step
+}
+
+function restartNav() {
+  running = false;
+  clearTimeout(timer);
+  step = 0;
+  document.getElementById('arrivedOverlay').classList.remove('show');
+  const arrow = document.getElementById('navArrow');
+  if (arrow) arrow.setAttribute('visible', 'true');
+  const ring = document.getElementById('destRing');
+  if (ring)  ring.setAttribute('visible', 'false');
+  buildDots();
+  showStep(0);
+  setTimeout(startNav, 600);
+}
+
+function onArrived() {
+  running = false;
+  clearTimeout(timer);
+
+  // Hide nav arrow, show floor ring
+  const arrow = document.getElementById('navArrow');
+  if (arrow) arrow.setAttribute('visible', 'false');
+  const ring = document.getElementById('destRing');
+  if (ring)  ring.setAttribute('visible', 'true');
+
+  // Read target from sessionStorage
+  const target = JSON.parse(sessionStorage.getItem('navTarget') || 'null');
+  const sub = target
+    ? (target.type === 'patient' ? `${target.name} — Room ${target.room}` : target.name)
+    : 'Destination reached';
+  document.getElementById('arrivedSub').textContent = sub;
+
+  document.getElementById('arrivedOverlay').classList.add('show');
+  speak(T[lang]['reached']);
+}
+
+/* ─────────────────────────────────────
+   START AR
+   ───────────────────────────────────── */
+function startAR() {
+  // Hide permission screen
+  document.getElementById('permScreen').classList.add('hide');
+
+  // Show AR scene and UI
+  document.getElementById('arScene').classList.remove('hidden');
+  document.getElementById('topBar').classList.remove('hidden');
+  document.getElementById('stepPill').classList.remove('hidden');
+  document.getElementById('dirCard').classList.remove('hidden');
+  document.getElementById('controls').classList.remove('hidden');
+
+  // Load voices & language
+  loadVoices();
+  lang = localStorage.getItem('navLang') || 'en';
+  document.getElementById('langSel').value = lang;
+
+  // Build dots and show first step (no auto-speak yet)
+  buildDots();
+  showStep(0);
+
+  // Auto-start after camera warms up
+  setTimeout(startNav, 2000);
+}
+
+// Pre-load voices on page load
+if (window.speechSynthesis) loadVoices();
+</script>
+</body>
+</html>
