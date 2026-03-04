@@ -259,28 +259,17 @@ function _mergeConsecutive(waypoints) {
    ============================================================ */
 
 /* ══════════════════════════════════════════════════════════
-   VOICE ENGINE
-   English/Hindi → Web Speech API (browser built-in)
-   Telugu        → VoiceRSS API (real Telugu audio, free)
+   VOICE ENGINE — Simple, Reliable, No External APIs
+   Works on Chrome, Firefox, Safari, Mobile
    ══════════════════════════════════════════════════════════ */
 
-let _voiceList    = [];
-let _voicesReady  = false;
-let _isSpeaking   = false;
+let _voiceList   = [];
+let _voicesReady = false;
+let _isSpeaking  = false;
 let _pendingSpeak = null;
 let _currentAudio = null;
 
 const _BCP47 = { en: 'en-IN', te: 'te-IN', hi: 'hi-IN' };
-
-/* VoiceRSS API — free plan, real Telugu TTS, works everywhere */
-const _VRSS_KEY = 'b2b64c0910754b2f8ab5e445fd7beace'; // free key
-const _VRSS_LANG = { en: 'en-in', te: 'te-in', hi: 'hi-in' };
-
-/* Build VoiceRSS audio URL for Telugu/Hindi */
-function _voiceRSSUrl(text, lang) {
-  const l = _VRSS_LANG[lang] || 'en-in';
-  return `https://api.voicerss.org/?key=${_VRSS_KEY}&hl=${l}&src=${encodeURIComponent(text)}&f=48khz_16bit_mono&c=MP3&r=0`;
-}
 
 /* Load all available browser voices */
 function _loadVoices() {
@@ -290,6 +279,7 @@ function _loadVoices() {
   };
   load();
   speechSynthesis.addEventListener('voiceschanged', load);
+  // Polling fallback
   const t = setInterval(() => {
     if (_voiceList.length > 0) { clearInterval(t); return; }
     _voiceList   = speechSynthesis.getVoices();
@@ -298,7 +288,7 @@ function _loadVoices() {
   setTimeout(() => clearInterval(t), 8000);
 }
 
-/* Pick best browser voice for language */
+/* Pick best voice for language */
 function _pickVoice(lang) {
   const bcp = _BCP47[lang] || 'en-IN';
   const pre = bcp.split('-')[0];
@@ -308,7 +298,7 @@ function _pickVoice(lang) {
       || (_voiceList.length > 0 ? _voiceList[0] : null);
 }
 
-/* Check if browser has native voice for lang */
+/* Check if browser has a native voice for this lang */
 function _hasBrowserVoice(lang) {
   const pre = (_BCP47[lang] || lang).split('-')[0];
   return _voiceList.some(v => v.lang.startsWith(pre));
@@ -318,8 +308,9 @@ function _hasBrowserVoice(lang) {
  * speak(text, lang) — fire and forget
  */
 function speak(text, lang) {
+  if (!window.speechSynthesis) return;
   const l = lang || getCurrentLang();
-  _cancelCurrent();
+  speechSynthesis.cancel();
   _isSpeaking   = true;
   _pendingSpeak = null;
   _doSpeak(text, l, () => { _isSpeaking = false; });
@@ -331,8 +322,9 @@ function speak(text, lang) {
  * Used by map animation to pause dot until voice ends.
  */
 function speakWithCallback(text, lang, onDone) {
+  if (!window.speechSynthesis) { if (onDone) onDone(); return; }
   const l = lang || getCurrentLang();
-  _cancelCurrent();
+  speechSynthesis.cancel();
   _isSpeaking = true;
   setTimeout(() => {
     _doSpeak(text, l, () => {
@@ -344,104 +336,77 @@ function speakWithCallback(text, lang, onDone) {
 
 /**
  * _doSpeak(text, lang, onDone)
- * Core speak function.
+ * Core speak function — handles all languages cleanly.
  *
- * Telugu/Hindi → VoiceRSS API (real native audio, free)
- * English      → Web Speech API (browser built-in)
- * Fallback     → Web Speech API in English
+ * Telugu strategy:
+ *   1. Try te-IN browser voice (works on Android Chrome, some PCs)
+ *   2. If no Telugu voice → translate text to English equivalent
+ *      and speak in English so user still hears directions clearly
  */
 function _doSpeak(text, lang, onDone) {
-  if (lang === 'te' || lang === 'hi') {
-    // Use VoiceRSS for real Telugu / Hindi audio
-    _speakViaVoiceRSS(text, lang, onDone);
-  } else {
-    _speakViaBrowser(text, lang, onDone);
+  // For Telugu — check if browser has te-IN voice
+  // If not, use English directions (always works)
+  let speakLang = lang;
+  let speakText = text;
+
+  if (lang === 'te' && !_hasBrowserVoice('te')) {
+    // No Telugu voice on this device → speak in English
+    speakLang = 'en';
+    speakText = _teToEn(text);
   }
-}
 
-/**
- * _speakViaVoiceRSS(text, lang, onDone)
- * Fetches real Telugu/Hindi audio from VoiceRSS free API.
- * Works on ALL browsers and devices — no voice install needed!
- */
-function _speakViaVoiceRSS(text, lang, onDone) {
-  try {
-    const url   = _voiceRSSUrl(text, lang);
-    const audio = new Audio();
-    _currentAudio = audio;
+  const utter    = new SpeechSynthesisUtterance(speakText);
+  utter.lang     = _BCP47[speakLang] || 'en-IN';
+  utter.rate     = 0.85;
+  utter.pitch    = 1.05;
+  utter.volume   = 1.0;
 
-    audio.src    = url;
-    audio.volume = 1.0;
+  const voice = _pickVoice(speakLang);
+  if (voice) utter.voice = voice;
 
-    audio.oncanplaythrough = () => {
-      audio.play().catch(err => {
-        console.warn('VoiceRSS play blocked:', err);
-        _currentAudio = null;
-        // Fallback to browser speech
-        _speakViaBrowser(text, lang, onDone);
-      });
-    };
-
-    audio.onended = () => {
-      _currentAudio = null;
-      if (onDone) onDone();
-    };
-
-    audio.onerror = () => {
-      console.warn('VoiceRSS failed, using browser fallback');
-      _currentAudio = null;
-      _speakViaBrowser(text, lang, onDone);
-    };
-
-    // Timeout safety — if audio doesn't load in 5s, use fallback
-    setTimeout(() => {
-      if (_currentAudio === audio) {
-        audio.src = '';
-        _currentAudio = null;
-        _speakViaBrowser(text, lang, onDone);
-      }
-    }, 5000);
-
-    audio.load();
-
-  } catch(e) {
-    console.error('VoiceRSS error:', e);
-    _speakViaBrowser(text, lang, onDone);
-  }
-}
-
-/**
- * _speakViaBrowser(text, lang, onDone)
- * Web Speech API — for English (and fallback for Telugu/Hindi)
- */
-function _speakViaBrowser(text, lang, onDone) {
-  if (!window.speechSynthesis) { if (onDone) onDone(); return; }
-  speechSynthesis.cancel();
-
-  const utter  = new SpeechSynthesisUtterance(text);
-  utter.lang   = _BCP47[lang] || 'en-IN';
-  utter.rate   = 0.85;
-  utter.pitch  = 1.05;
-  utter.volume = 1.0;
-
-  const doSpeak = () => {
-    const voice = _pickVoice(lang);
-    if (voice) utter.voice = voice;
-    utter.onend  = () => { if (onDone) onDone(); };
-    utter.onerror = () => { if (onDone) onDone(); };
-    speechSynthesis.speak(utter);
-  };
+  utter.onend   = () => { if (onDone) onDone(); };
+  utter.onerror = () => { if (onDone) onDone(); };
 
   if (_voicesReady) {
-    setTimeout(doSpeak, 100);
+    speechSynthesis.speak(utter);
   } else {
     speechSynthesis.addEventListener('voiceschanged', () => {
       _voiceList   = speechSynthesis.getVoices();
       _voicesReady = true;
-      doSpeak();
+      const v = _pickVoice(speakLang);
+      if (v) utter.voice = v;
+      speechSynthesis.speak(utter);
     }, { once: true });
-    setTimeout(doSpeak, 600);
+    // Also try directly after 500ms in case event never fires
+    setTimeout(() => {
+      if (!utter.onend._called) speechSynthesis.speak(utter);
+    }, 500);
   }
+}
+
+/**
+ * _teToEn(teText)
+ * Maps Telugu navigation phrases to English equivalents.
+ * Used as fallback when device has no Telugu voice.
+ */
+function _teToEn(teText) {
+  const map = {
+    'నావిగేషన్ ప్రారంభమవుతోంది. ప్రధాన ద్వారం నుండి నేరుగా వెళ్లండి.': 'Starting navigation. Walk straight from the main entrance.',
+    'నేరుగా వెళ్లండి':          'Continue straight ahead',
+    'ఎడమవైపు తిరగండి':           'Turn left',
+    'కుడివైపు తిరగండి':           'Turn right',
+    'వెనక్కి తిరిగి వెళ్లండి':   'Turn around and go back',
+    'లిఫ్ట్ ఉపయోగించి పైకి వెళ్లండి':        'Take the lift to go up',
+    'వీల్ చైర్ ర్యాంప్ ఉపయోగించి పైకి వెళ్లండి': 'Use the wheelchair ramp',
+    'మీరు గమ్యస్థానానికి చేరుకున్నారు':       'You have arrived at your destination',
+  };
+  // Check exact match first
+  if (map[teText]) return map[teText];
+  // Check partial match
+  for (const [te, en] of Object.entries(map)) {
+    if (teText.includes(te)) return en;
+  }
+  return teText; // return original if no match
 }
 
 /** Stop all speech immediately */
