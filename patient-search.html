@@ -180,13 +180,22 @@
             <!-- Filled by JS -->
           </div>
 
+          <!-- Navigation Mode Label -->
+          <div style="text-align:center; font-size:12px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px;">
+            Choose Navigation Mode
+          </div>
+
           <!-- Navigation buttons -->
           <div class="nav-btns">
-            <button class="btn btn-primary" onclick="goToMap('pathway')">
-              🗺️ Show Pathway
+            <button class="btn btn-primary" onclick="goToMap('pathway')" style="flex-direction:column; gap:4px; padding:14px 10px;">
+              <span style="font-size:22px;">🗺️</span>
+              <span>Live Map</span>
+              <span style="font-size:11px; opacity:0.8; font-weight:400;">2D Indoor Map</span>
             </button>
-            <button class="btn btn-secondary" onclick="goToMap('floor')">
-              🏢 View Floor Map
+            <button class="btn btn-secondary" onclick="goToAR()" style="flex-direction:column; gap:4px; padding:14px 10px;">
+              <span style="font-size:22px;">📷</span>
+              <span>AR Navigation</span>
+              <span style="font-size:11px; opacity:0.8; font-weight:400;">Camera + Arrows</span>
             </button>
           </div>
 
@@ -350,6 +359,23 @@
      * Map room numbers to approximate canvas positions.
      * (In a real app these would be stored in the database.)
      */
+    /**
+     * goToAR()
+     * Save destination and go to AR navigation page.
+     */
+    function goToAR() {
+      if (!foundPatient) { alert('Please search for a patient first.'); return; }
+      setNavTarget({
+        type:  'patient',
+        name:  foundPatient.name,
+        room:  foundPatient.room,
+        floor: foundPatient.floor,
+        dept:  foundPatient.dept,
+        lang:  getCurrentLang(),
+      });
+      window.location.href = 'ar.html';
+    }
+
     function getRoomX(floor, room) {
       // Simple hash — rooms spread across the canvas width
       const num = parseInt(room) || 200;

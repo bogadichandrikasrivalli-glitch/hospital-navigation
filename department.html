@@ -151,13 +151,21 @@
     </div>
 
     <!-- Action buttons -->
-    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
       <button class="btn btn-outline btn-sm" onclick="speakDeptInfo()">
         🔊 Read Aloud
       </button>
-      <button class="btn btn-primary" onclick="goToDeptMap()" style="padding:12px 24px;">
-        🗺️ Navigate to Department →
-      </button>
+      <!-- Navigation mode choice -->
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="goToDeptMap()" style="flex-direction:column; gap:3px; padding:10px 16px; min-width:110px;">
+          <span>🗺️ Live Map</span>
+          <span style="font-size:10px; opacity:0.85; font-weight:400;">2D Indoor Map</span>
+        </button>
+        <button class="btn btn-secondary" onclick="goToDeptAR()" style="flex-direction:column; gap:3px; padding:10px 16px; min-width:110px;">
+          <span>📷 AR Navigate</span>
+          <span style="font-size:10px; opacity:0.85; font-weight:400;">Camera + Arrows</span>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -276,6 +284,21 @@
      * speakDeptInfo()
      * Read selected department info aloud.
      */
+    /**
+     * goToDeptAR()
+     * Save selected department and go to AR navigation.
+     */
+    function goToDeptAR() {
+      if (!selectedDept) { alert('Please select a department first.'); return; }
+      setNavTarget({
+        type:  'department',
+        name:  selectedDept.name,
+        floor: selectedDept.floor,
+        lang:  getCurrentLang(),
+      });
+      window.location.href = 'ar.html';
+    }
+
     function speakDeptInfo() {
       if (!selectedDept) return;
       const lang = getCurrentLang();

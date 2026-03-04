@@ -365,11 +365,12 @@ function speak(text, lang) {
  */
 function _speakViaBrowser(text, lang) {
   if (!window.speechSynthesis) { _isSpeaking = false; return; }
+  speechSynthesis.cancel(); // clear any stuck utterances
 
   const utter   = new SpeechSynthesisUtterance(text);
   utter.lang    = _BCP47[lang] || 'en-IN';
-  utter.rate    = 0.90;   // natural speed — not too slow
-  utter.pitch   = 1.0;
+  utter.rate    = 0.85;   // slightly slower = clearer pronunciation
+  utter.pitch   = 1.05;  // slightly higher = more natural
   utter.volume  = 1.0;
 
   const doSpeak = () => {
@@ -481,7 +482,7 @@ function speakWithCallback(text, lang, onDone) {
 
   const done = () => {
     _isSpeaking = false;
-    if (onDone) setTimeout(onDone, 600);  // 600ms pause after speech ends
+    if (onDone) setTimeout(onDone, 800);  // 800ms pause after speech ends — dot waits before moving
   };
 
   if (l === 'te' || !_hasBrowserVoice(l)) {
@@ -495,18 +496,24 @@ function speakWithCallback(text, lang, onDone) {
 function _speakViaBrowserWithCB(text, lang, onDone) {
   if (!window.speechSynthesis) { if (onDone) onDone(); return; }
 
+  // Cancel any stuck speech before starting new one
+  speechSynthesis.cancel();
+
   const utter  = new SpeechSynthesisUtterance(text);
   utter.lang   = _BCP47[lang] || 'en-IN';
-  utter.rate   = 0.90;
-  utter.pitch  = 1.0;
+  utter.rate   = 0.85;   // clearer, natural pace
+  utter.pitch  = 1.05;   // natural tone
   utter.volume = 1.0;
 
   const doSpeak = () => {
     const voice = _pickVoice(lang);
     if (voice) utter.voice = voice;
-    utter.onend  = () => { if (onDone) onDone(); };
-    utter.onerror = () => { if (onDone) onDone(); };
-    speechSynthesis.speak(utter);
+    // Small delay after cancel() so browser resets cleanly
+    setTimeout(() => {
+      utter.onend  = () => { if (onDone) onDone(); };
+      utter.onerror = () => { if (onDone) onDone(); };
+      speechSynthesis.speak(utter);
+    }, 120);
   };
 
   if (_voicesReady) doSpeak();

@@ -342,6 +342,15 @@
       <option value="hi">🇮🇳 हिन्दी (Hindi)</option>
     </select>
   </div>
+  <!-- Navigation Mode Switcher -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;max-width:340px;margin-left:auto;margin-right:auto;">
+    <a href="map.html" style="background:rgba(255,255,255,0.12);border:2px solid rgba(255,255,255,0.25);color:#fff;border-radius:10px;padding:10px 8px;text-align:center;font-size:13px;font-weight:700;text-decoration:none;display:block;">
+      🗺️ Map Mode<br><span style="font-size:10px;opacity:0.7;font-weight:400;">Switch to Map</span>
+    </a>
+    <div style="background:rgba(0,168,120,0.35);border:2px solid var(--secondary);color:#fff;border-radius:10px;padding:10px 8px;text-align:center;font-size:13px;font-weight:700;">
+      📷 AR Mode<br><span style="font-size:10px;opacity:0.8;font-weight:400;">Currently Active</span>
+    </div>
+  </div>
   <div class="btn-row">
     <button class="ar-btn btn-green"  onclick="startNav()">▶️ Start</button>
     <button class="ar-btn btn-ghost"  onclick="repeatSpeak()">🔊 Repeat</button>

@@ -371,6 +371,23 @@
           🔄 Restart Navigation
         </button>
 
+        <!-- Navigation Mode Switcher -->
+        <div style="margin-top:16px; background:#f0f4f8; border-radius:14px; padding:14px; border:1.5px solid var(--border);">
+          <div style="text-align:center; font-size:11px; font-weight:700; color:var(--text-muted); margin-bottom:10px; text-transform:uppercase; letter-spacing:0.5px;">
+            Switch Navigation Mode
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <div style="background:var(--primary); color:#fff; border-radius:10px; padding:12px 8px; text-align:center; font-size:13px; font-weight:700;">
+              🗺️ Live Map<br>
+              <span style="font-size:10px; opacity:0.8; font-weight:400;">✅ Active</span>
+            </div>
+            <a href="ar.html" id="switchToAR" style="background:#fff; color:var(--secondary); border:2px solid var(--secondary); border-radius:10px; padding:12px 8px; text-align:center; font-size:13px; font-weight:700; text-decoration:none; display:block;">
+              📷 AR Mode<br>
+              <span style="font-size:10px; color:var(--text-muted); font-weight:400;">Camera View</span>
+            </a>
+          </div>
+        </div>
+
         <!-- Links back -->
         <div style="margin-top:14px; text-align:center; font-size:13px; color:var(--text-muted);">
           <a href="patient-search.html" style="color:var(--primary); font-weight:700; text-decoration:none;">
@@ -525,7 +542,7 @@ const DIR_ICONS = {
    Tune this to control how fast the dot moves between steps.
    ══════════════════════════════════════════════════════════ */
 
-const SPEED_PER_FRAME = 0.006;  // ~5s to cross one step segment
+const SPEED_PER_FRAME = 0.004;  // ~7s per step — gives voice time to finish clearly
 
 // Extra state for voice-sync pause
 let _waitingForVoice = false;
@@ -641,8 +658,9 @@ function onWaypointReached(idx, onDone) {
   document.getElementById('currIcon').textContent = DIR_ICONS[dirKey] || '•';
   document.getElementById('currText').textContent = text;
 
-  // ── Speak the instruction, then call onDone ──
-  speakWithCallback(text, lang, onDone);
+  // ── Speak the instruction after tiny settle delay, then call onDone ──
+  // 300ms delay ensures dot has fully stopped at waypoint before voice starts
+  setTimeout(() => speakWithCallback(text, lang, onDone), 300);
 
   // ── Update step list highlighting ──
   document.querySelectorAll('.step-row').forEach((row, i) => {
